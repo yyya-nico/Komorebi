@@ -5,10 +5,9 @@ import android.annotation.SuppressLint
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.runtime.*
+import androidx.compose.runtime.LaunchedEffect
 import androidx.media3.common.util.UnstableApi
 import com.beeregg2001.komorebi.ui.theme.KomorebiTheme
-import com.beeregg2001.komorebi.ui.components.ExitDialog
 import com.beeregg2001.komorebi.ui.home.LoadingScreen
 import com.beeregg2001.komorebi.ui.main.MainRootScreen
 import com.beeregg2001.komorebi.ui.setting.SetupReadErrorScreen
@@ -44,25 +43,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             LaunchedEffect(Unit) { ColdStartDiag.mark("setContent (first composition)") }
             KomorebiTheme {
-                var showExitDialog by remember { mutableStateOf(false) }
-
                 when (setupViewModel.route) {
                     SetupRoute.LOADING -> LoadingScreen("設定を読み込み中…")
                     SetupRoute.READ_ERROR -> SetupReadErrorScreen(onRetry = setupViewModel::load)
-                    SetupRoute.WIZARD -> SetupWizardScreen(setupViewModel, onExit = { showExitDialog = true })
+                    SetupRoute.WIZARD -> SetupWizardScreen(setupViewModel, onExit = ::finish)
                     SetupRoute.HOME -> MainRootScreen(
                         channelViewModel = channelViewModel,
                         epgViewModel = epgViewModel,
                         homeViewModel = homeViewModel,
                         recordViewModel = recordViewModel,
-                        onExitApp = { showExitDialog = true }
-                    )
-                }
-
-                if (showExitDialog) {
-                    ExitDialog(
-                        onConfirm = { finish() },
-                        onDismiss = { showExitDialog = false }
+                        onExitApp = ::finish
                     )
                 }
             }

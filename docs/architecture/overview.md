@@ -588,7 +588,7 @@ PR #103 のコミット `dafd67a` に「Cloudflare Access のトークンを EPG
 | `ui/epg/` | `EpgNavigationContainer.kt`, `ModernEpgCanvasEngine.kt`, `ModernEpgCanvasEngine_NoAnime.kt`, `EpgDataConverter.kt`, `EpgJumpMenu.kt`, `ProgramDetailScreen.kt`, `engine/`(`EpgConfig`, `EpgDrawer`, `EpgState`), `components/`(検索結果) | 番組表。Compose の Canvas に直接描画する自前レンダリングエンジン |
 | `ui/reserve/` | `ReserveListScreen.kt`(682行), `ConditionEditDialog.kt`(875行), `EpgReserveDialog.kt`, `ReserveSettingsDialog.kt`, `AdvancedSettingsDialog.kt`, `ReserveSharedComponents.kt` | 録画予約。単発予約と自動予約（キーワード予約）条件の編集 |
 | `ui/setting/` | `SettingScreen.kt`(1184行), `SettingContents.kt`(1258行), `SettingComponents.kt`(1472行), `SettingState.kt`, `OpenSourceLicensesScreen.kt`(1241行) | 設定画面。10 カテゴリの 2 ペイン構成 |
-| `ui/components/` | `AiConciergePanel.kt`, `RecordedCard.kt`, `ReserveCard.kt`, `ChannelLogo.kt`, `KeywordConditionCard.kt`, `ExitDialog.kt`, `InputDialog.kt`, `GlobalToast.kt`, `ChannelExtensions.kt` | 画面横断の共通部品 |
+| `ui/components/` | `AiConciergePanel.kt`, `RecordedCard.kt`, `ReserveCard.kt`, `ChannelLogo.kt`, `KeywordConditionCard.kt`, `InputDialog.kt`, `GlobalToast.kt`, `ChannelExtensions.kt` | 画面横断の共通部品 |
 | `ui/theme/` | `Theme.kt`, `Color.kt`, `Type.kt`, `Typography.kt` | `KomorebiTheme` / `KomorebiColors` / `NotoSansJP`。`appTheme` 設定（既定 `"MONOTONE"`）で切り替え |
 
 ### 4.2 番組表の描画エンジン

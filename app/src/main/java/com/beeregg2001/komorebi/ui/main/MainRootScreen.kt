@@ -431,7 +431,7 @@ fun MainRootScreen(
             // プレイヤー系の分岐より後ろに置いていたため、ミニプレイヤー表示中に設定画面を開くと
             // 戻るキーを押しても設定画面が閉じず、isMiniPlayerModeの解除→プレイヤーの終了…と
             // 背面の状態だけが消化されてしまい、最後にはホーム画面の戻る処理まで到達して
-            // アプリ終了確認ダイアログが表示されていた。前面にあるものから閉じる順序へ修正する。
+            // 終了処理が呼ばれていた。前面にあるものから閉じる順序にする。
             state.isSettingsOpen -> closeSettingsAndRefresh()
 
             state.isMiniPlayerMode -> {
