@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -39,6 +40,7 @@ import com.beeregg2001.komorebi.viewmodel.SetupViewModel
 internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
     val page = viewModel.page
     val colors = KomorebiTheme.colors
+    val isKonomiConnection = page == SetupPage.MAIN_CONNECTION && viewModel.mainSystem == StreamSource.KONOMITV
     val skipCloudflare = page == SetupPage.CLOUDFLARE &&
         viewModel.clientId.isBlank() && viewModel.clientSecret.isBlank()
     BackHandler {
@@ -46,15 +48,19 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
     }
 
     Box(
-        modifier = Modifier.fillMaxSize().background(colors.background).padding(horizontal = 32.dp),
+        modifier = Modifier.fillMaxSize().background(colors.background)
+            .then(if (isKonomiConnection) Modifier.imePadding() else Modifier)
+            .padding(horizontal = 32.dp),
         contentAlignment = Alignment.Center
     ) {
         key(page) {
             val initialFocus = remember { FocusRequester() }
             val reusesMainConnection = page == SetupPage.SOURCE_CONNECTION && viewModel.alternateSource == null
             val focusNext = page == SetupPage.WELCOME || reusesMainConnection
-            LaunchedEffect(viewModel.isSaving) {
-                if (!viewModel.isSaving) initialFocus.safeRequestFocusWithRetry("SetupWizard")
+            if (!isKonomiConnection) {
+                LaunchedEffect(viewModel.isSaving) {
+                    if (!viewModel.isSaving) initialFocus.safeRequestFocusWithRetry("SetupWizard")
+                }
             }
 
             Column(
@@ -67,7 +73,11 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                     color = colors.textSecondary
                 )
                 Text(
-                    if (reusesMainConnection) "ライブ視聴の接続先" else page.title,
+                    when {
+                        isKonomiConnection -> KONOMI_CONNECTION_TITLE
+                        reusesMainConnection -> "ライブ視聴の接続先"
+                        else -> page.title
+                    },
                     style = MaterialTheme.typography.headlineMedium,
                     color = colors.textPrimary
                 )
@@ -94,6 +104,7 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                             connection = viewModel.connection(viewModel.mainSystem),
                             includeHttpPort = true,
                             initialFocus = initialFocus,
+                            error = viewModel.error,
                             onChange = viewModel::updateConnection
                         )
                         SetupPage.SOURCE -> SetupChoices(
@@ -147,8 +158,10 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                     }
                 }
 
-                viewModel.error?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
+                if (!isKonomiConnection) {
+                    viewModel.error?.let {
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
+                    }
                 }
 
                 Row(
@@ -217,8 +230,15 @@ private fun ConnectionFields(
     connection: SetupConnection,
     includeHttpPort: Boolean,
     initialFocus: FocusRequester,
+    error: String? = null,
     onChange: (SetupConnection) -> Unit
 ) {
+    if (connection.source == StreamSource.KONOMITV) {
+        KonomiConnectionFields(connection.konomi, error) {
+            onChange(connection.copy(host = it.host, port = it.port, manualKonomi = it.manual))
+        }
+        return
+    }
     val system = when (connection.source) {
         StreamSource.KONOMITV -> "KonomiTV"
         StreamSource.EDCB -> "EDCB"
@@ -226,12 +246,6 @@ private fun ConnectionFields(
         StreamSource.MIRAKURUN -> "Mirakurun"
     }
     SetupInstructions("$system の接続先を入力してください。")
-    if (connection.source == StreamSource.KONOMITV) {
-        KonomiConnectionFields(connection.konomi, initialFocus) {
-            onChange(connection.copy(host = it.host, port = it.port, manualKonomi = it.manual))
-        }
-        return
-    }
     SetupField(
         "ホスト名・IPアドレス・URL",
         connection.host,

@@ -14,8 +14,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -33,14 +36,26 @@ import androidx.tv.material3.Text
 import com.beeregg2001.komorebi.common.safeRequestFocusWithRetry
 import com.beeregg2001.komorebi.data.KonomiConnection
 import com.beeregg2001.komorebi.ui.theme.KomorebiTheme
+import kotlinx.coroutines.flow.first
+
+internal const val KONOMI_CONNECTION_TITLE = "KonomiTV の接続先"
 
 @Composable
 internal fun KonomiConnectionFields(
     connection: KonomiConnection,
-    initialFocus: FocusRequester,
+    error: String?,
     onChange: (KonomiConnection) -> Unit
 ) {
+    val initialFocus = remember { FocusRequester() }
+    val windowInfo = LocalWindowInfo.current
     var alternateHost by remember { mutableStateOf("") }
+
+    LaunchedEffect(windowInfo) {
+        snapshotFlow { windowInfo.isWindowFocused }.first { it }
+        withFrameNanos { }
+        initialFocus.safeRequestFocusWithRetry("KonomiConnection")
+    }
+
     if (!connection.manual) {
         SetupField(
             label = "IPアドレス",
@@ -81,6 +96,7 @@ internal fun KonomiConnectionFields(
             keyboardType = KeyboardType.Uri
         )
     }
+    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 }
 
 @Composable
@@ -91,7 +107,6 @@ internal fun KonomiConnectionDialog(
 ) {
     var connection by remember { mutableStateOf(initial) }
     var error by remember { mutableStateOf<String?>(null) }
-    val initialFocus = remember { FocusRequester() }
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(16.dp),
@@ -101,12 +116,11 @@ internal fun KonomiConnectionDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("KonomiTV の接続先", style = MaterialTheme.typography.headlineSmall)
-                KonomiConnectionFields(connection, initialFocus) {
+                Text(KONOMI_CONNECTION_TITLE, style = MaterialTheme.typography.headlineSmall)
+                KonomiConnectionFields(connection, error) {
                     connection = it
                     error = null
                 }
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -120,6 +134,5 @@ internal fun KonomiConnectionDialog(
                 }
             }
         }
-        LaunchedEffect(Unit) { initialFocus.safeRequestFocusWithRetry("KonomiConnectionDialog") }
     }
 }
