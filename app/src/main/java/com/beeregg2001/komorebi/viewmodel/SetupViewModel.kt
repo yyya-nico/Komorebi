@@ -6,7 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.beeregg2001.komorebi.data.KonomiConnection
+import com.beeregg2001.komorebi.data.ConnectionAddress
 import com.beeregg2001.komorebi.data.SettingsRepository
 import com.beeregg2001.komorebi.data.SetupConnection
 import com.beeregg2001.komorebi.data.model.StreamSource
@@ -14,7 +14,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.IOException
 import javax.inject.Inject
 import kotlinx.coroutines.launch
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 internal enum class SetupPage(val title: String) {
     WELCOME("Komorebiへようこそ"),
@@ -39,6 +38,7 @@ internal class SetupViewModel @Inject constructor(
     var mainSystem by mutableStateOf(StreamSource.KONOMITV)
     var preferredSource by mutableStateOf(StreamSource.KONOMITV)
     var smb by mutableStateOf(SmbServer(name = "", ip = "", port = "445", user = "", password = ""))
+    var smbManualAddress by mutableStateOf(false)
     var clientId by mutableStateOf("")
     var clientSecret by mutableStateOf("")
     var isSaving by mutableStateOf(false)
@@ -48,10 +48,10 @@ internal class SetupViewModel @Inject constructor(
 
     private var addSmb = false
     private val connections = mutableStateMapOf(
-        StreamSource.KONOMITV to SetupConnection(StreamSource.KONOMITV, "", KonomiConnection.DEFAULT_PORT),
-        StreamSource.EDCB to SetupConnection(StreamSource.EDCB, "", "4510", "5510"),
-        StreamSource.EPGSTATION to SetupConnection(StreamSource.EPGSTATION, "", "8888"),
-        StreamSource.MIRAKURUN to SetupConnection(StreamSource.MIRAKURUN, "", "40772")
+        StreamSource.KONOMITV to SetupConnection(StreamSource.KONOMITV),
+        StreamSource.EDCB to SetupConnection(StreamSource.EDCB, httpPort = "5510"),
+        StreamSource.EPGSTATION to SetupConnection(StreamSource.EPGSTATION),
+        StreamSource.MIRAKURUN to SetupConnection(StreamSource.MIRAKURUN)
     )
 
     val alternateSource: StreamSource?
@@ -88,9 +88,9 @@ internal class SetupViewModel @Inject constructor(
     fun next(skip: Boolean = false) {
         if (isSaving) return
         val message = when (page) {
-            SetupPage.MAIN_CONNECTION -> connectionError(connection(mainSystem), true)
+            SetupPage.MAIN_CONNECTION -> connection(mainSystem).validationError()
             SetupPage.SOURCE_CONNECTION -> alternateSource?.let {
-                connectionError(connection(it), false)
+                connection(it).copy(httpPort = null).validationError()
             }
             SetupPage.FILE_LIBRARY -> if (skip) null else smbError()
             else -> null
@@ -106,36 +106,13 @@ internal class SetupViewModel @Inject constructor(
         }
     }
 
-    private fun connectionError(connection: SetupConnection, includeHttpPort: Boolean): String? {
-        if (connection.source == StreamSource.KONOMITV) return connection.konomi.validationError()
-        val host = connection.host.trim()
-        val url = if (host.contains("://")) host else "http://$host"
-        if (host.isEmpty() || host.any { it.isWhitespace() } || url.toHttpUrlOrNull() == null
-        ) {
-            return "有効なホスト名、IPアドレス、またはURLを入力してください。"
-        }
-        if (!isValidPort(connection.port)) return "ポート番号は1〜65535で入力してください。"
-        if (includeHttpPort && connection.httpPort?.let { !isValidPort(it) } == true) {
-            return "HTTP/HTTPSポートは1〜65535で入力してください。"
-        }
-        return null
+    private fun smbError(): String? {
+        if (smb.name.isBlank()) return "ファイルライブラリの表示名を入力してください。"
+        return ConnectionAddress.validationError(smb.ip, smbManualAddress, allowUrl = false)
+            ?: if (smb.port.isNotBlank() && !ConnectionAddress.isValidPort(smb.port)) {
+                "ポート番号は1〜65535で入力してください。"
+            } else null
     }
-
-    private fun smbError(): String? = when {
-        smb.name.isBlank() -> "ファイルライブラリの表示名を入力してください。"
-        smb.ip.isBlank() -> "SMBサーバーのホスト名またはIPアドレスを入力してください。"
-        smb.port.isNotBlank() && !isValidPort(smb.port) -> "ポート番号は1〜65535で入力してください。"
-        else -> null
-    }
-
-    private fun isValidPort(value: String): Boolean =
-        value.trim().toIntOrNull()?.let { it in 1..65535 } == true
-
-    private fun SetupConnection.normalized(includeHttpPort: Boolean) = copy(
-        host = if (source == StreamSource.KONOMITV) konomi.storageHost() else host.trim(),
-        port = port.trim(),
-        httpPort = httpPort?.trim()?.takeIf { includeHttpPort }
-    )
 
     private fun finish(skip: Boolean) {
         val accessHeaders = if (skip) emptyMap() else
@@ -156,9 +133,9 @@ internal class SetupViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 repository.completeInitialSetup(
-                    main = connection(mainSystem).normalized(includeHttpPort = true),
+                    main = connection(mainSystem).normalized(),
                     preferredSource = preferredSource,
-                    alternate = alternateSource?.let { connection(it).normalized(includeHttpPort = false) },
+                    alternate = alternateSource?.let { connection(it).copy(httpPort = null).normalized() },
                     smbServer = smbServer,
                     accessHeaders = accessHeaders
                 )

@@ -19,7 +19,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.*
 import com.beeregg2001.komorebi.common.AppStrings
-import com.beeregg2001.komorebi.data.KonomiConnection
+import com.beeregg2001.komorebi.data.SetupConnection
+import com.beeregg2001.komorebi.data.model.StreamSource
 import com.beeregg2001.komorebi.data.model.StreamQuality
 import com.beeregg2001.komorebi.ui.theme.KomorebiTheme
 import com.beeregg2001.komorebi.util.UpdateState
@@ -271,7 +272,7 @@ fun ConnectionSettingsContent(
     edcbPlayMethodR: FocusRequester,
     cfClientId: String,
     cfClientSecret: String,
-    onEditKonomi: () -> Unit,
+    onEditConnection: (StreamSource) -> Unit,
     onEdit: (String, String) -> Unit,
     onSelectBackend: () -> Unit,
     onSelectSrc: () -> Unit,
@@ -346,49 +347,33 @@ fun ConnectionSettingsContent(
                 onClick = { onClick(backendTypeR); onSelectBackend() }
             )
 
-            val isKonomi = backendLabel == "KonomiTV"
-            val konomi = remember(kIp, kPort) { KonomiConnection.fromSaved(kIp, kPort) }
-            val currentIp = when (backendType) {
-                "EDCB" -> edcbIp
-                "EPGSTATION" -> epgStationIp
-                "MIRAKURUN_ONLY" -> mIp
-                else -> konomi.host
+            val connection = when (backendType) {
+                "EDCB" -> SetupConnection.fromSaved(StreamSource.EDCB, edcbIp, edcbPort)
+                "EPGSTATION" -> SetupConnection.fromSaved(StreamSource.EPGSTATION, epgStationIp, epgStationPort)
+                "MIRAKURUN_ONLY" -> SetupConnection.fromSaved(StreamSource.MIRAKURUN, mIp, mPort)
+                else -> SetupConnection.fromSaved(StreamSource.KONOMITV, kIp, kPort)
             }
-            val currentPort = when (backendType) {
-                "EDCB" -> edcbPort
-                "EPGSTATION" -> epgStationPort
-                "MIRAKURUN_ONLY" -> mPort
-                else -> konomi.port
-            }
-            val ipTitle = when (backendType) {
-                "EDCB" -> "EDCB (IPアドレス)"
-                "EPGSTATION" -> "EPGStation (IPアドレス)"
-                "MIRAKURUN_ONLY" -> "Mirakurun (IPアドレス)"
-                else -> if (konomi.manual) "KonomiTV (FQDN・URL)" else "KonomiTV (IPアドレス)"
-            }
-            val portTitle = when (backendType) {
-                "EDCB" -> "EDCB (TCPポート)"
-                "EPGSTATION" -> "EPGStation (ポート)"
-                "MIRAKURUN_ONLY" -> "Mirakurun (ポート)"
-                else -> "KonomiTV (ポート)"
-            }
+            val addressLabel = if (connection.manualAddress) "ホスト名・URL" else "IPアドレス"
+            val ipTitle = "${connection.serviceName} ($addressLabel)"
+            val portLabel = if (connection.source == StreamSource.EDCB) "TCPポート" else "ポート"
+            val portTitle = "${connection.serviceName} ($portLabel)"
             val edcbHttpPortTitle = "EDCB (HTTP/HTTPSポート)"
 
             SettingItem(
                 title = ipTitle,
-                value = currentIp.ifEmpty { AppStrings.SETTINGS_VALUE_UNSET },
+                value = connection.host.ifEmpty { AppStrings.SETTINGS_VALUE_UNSET },
                 icon = Icons.Default.Link,
                 modifier = Modifier
                     .focusRequester(backendIpR)
                     .focusProperties { left = sidebarR; up = backendTypeR; down = backendPortR },
                 onClick = {
                     onClick(backendIpR)
-                    if (isKonomi) onEditKonomi() else onEdit(ipTitle, currentIp)
+                    onEditConnection(connection.source)
                 }
             )
             SettingItem(
                 title = portTitle,
-                value = currentPort,
+                value = connection.port,
                 icon = Icons.Default.Numbers,
                 modifier = Modifier
                     .focusRequester(backendPortR)
@@ -399,7 +384,7 @@ fun ConnectionSettingsContent(
                     },
                 onClick = {
                     onClick(backendPortR)
-                    if (isKonomi) onEditKonomi() else onEdit(portTitle, currentPort)
+                    onEditConnection(connection.source)
                 }
             )
             if (backendType == "EDCB") {
@@ -419,8 +404,8 @@ fun ConnectionSettingsContent(
                 )
             }
 
-            if (currentIp.isBlank() || currentPort.isBlank()) {
-                ValidationErrorText("メインシステムのIPアドレスまたはポート番号が未設定です。\n番組情報の取得や録画機能が正常に動作しません。")
+            if (connection.host.isBlank()) {
+                ValidationErrorText("メインシステムの接続先が未設定です。\n番組情報の取得や録画機能が正常に動作しません。")
             }
         }
 
@@ -469,60 +454,64 @@ fun ConnectionSettingsContent(
 
             if (prefSrc == "MIRAKURUN") {
                 SettingsSection("Mirakurun 接続設定") {
+                    val connection = SetupConnection.fromSaved(StreamSource.MIRAKURUN, mIp, mPort)
+                    val addressLabel = if (connection.manualAddress) "ホスト名・URL" else "IPアドレス"
                     SettingItem(
-                        title = "IPアドレス (Mirakurun)",
-                        value = mIp.ifEmpty { AppStrings.SETTINGS_VALUE_UNSET },
+                        title = "$addressLabel (Mirakurun)",
+                        value = connection.host.ifEmpty { AppStrings.SETTINGS_VALUE_UNSET },
                         icon = Icons.Default.Router,
                         modifier = Modifier
                             .focusRequester(overrideIpR)
                             .focusProperties {
                                 left = sidebarR; up = prefSrcR; down = overridePortR
                             },
-                        onClick = { onClick(overrideIpR); onEdit("Mirakurun (IPアドレス)", mIp) }
+                        onClick = { onClick(overrideIpR); onEditConnection(StreamSource.MIRAKURUN) }
                     )
                     SettingItem(
                         title = "ポート番号 (Mirakurun)",
-                        value = mPort,
+                        value = connection.port,
                         icon = Icons.Default.Numbers,
                         modifier = Modifier
                             .focusRequester(overridePortR)
                             .focusProperties {
                                 left = sidebarR; up = overrideIpR; down = addSmbR
                             },
-                        onClick = { onClick(overridePortR); onEdit("Mirakurun (ポート)", mPort) }
+                        onClick = { onClick(overridePortR); onEditConnection(StreamSource.MIRAKURUN) }
                     )
 
-                    if (mIp.isBlank() || mPort.isBlank()) {
-                        ValidationErrorText("優先ソース（Mirakurun）のIPアドレスまたはポート番号が未設定です。\nこのままではライブ視聴機能が正常に動作しません。")
+                    if (connection.host.isBlank()) {
+                        ValidationErrorText("優先ソース（Mirakurun）の接続先が未設定です。\nこのままではライブ視聴機能が正常に動作しません。")
                     }
                 }
             } else if (prefSrc == "EDCB" && backendType != "EDCB") {
                 SettingsSection("EDCB 接続設定") {
+                    val connection = SetupConnection.fromSaved(StreamSource.EDCB, edcbIp, edcbPort)
+                    val addressLabel = if (connection.manualAddress) "ホスト名・URL" else "IPアドレス"
                     SettingItem(
-                        title = "IPアドレス (EDCB)",
-                        value = edcbIp.ifEmpty { AppStrings.SETTINGS_VALUE_UNSET },
+                        title = "$addressLabel (EDCB)",
+                        value = connection.host.ifEmpty { AppStrings.SETTINGS_VALUE_UNSET },
                         icon = Icons.Default.Router,
                         modifier = Modifier
                             .focusRequester(overrideIpR)
                             .focusProperties {
                                 left = sidebarR; up = prefSrcR; down = overridePortR
                             },
-                        onClick = { onClick(overrideIpR); onEdit("EDCB (IPアドレス)", edcbIp) }
+                        onClick = { onClick(overrideIpR); onEditConnection(StreamSource.EDCB) }
                     )
                     SettingItem(
                         title = "ポート番号 (EDCB)",
-                        value = edcbPort,
+                        value = connection.port,
                         icon = Icons.Default.Numbers,
                         modifier = Modifier
                             .focusRequester(overridePortR)
                             .focusProperties {
                                 left = sidebarR; up = overrideIpR; down = addSmbR
                             },
-                        onClick = { onClick(overridePortR); onEdit("EDCB (TCPポート)", edcbPort) }
+                        onClick = { onClick(overridePortR); onEditConnection(StreamSource.EDCB) }
                     )
 
-                    if (edcbIp.isBlank() || edcbPort.isBlank()) {
-                        ValidationErrorText("優先ソース（EDCB）のIPアドレスまたはポート番号が未設定です。\nこのままではライブ視聴機能が正常に動作しません。")
+                    if (connection.host.isBlank()) {
+                        ValidationErrorText("優先ソース（EDCB）の接続先が未設定です。\nこのままではライブ視聴機能が正常に動作しません。")
                     }
                 }
             }

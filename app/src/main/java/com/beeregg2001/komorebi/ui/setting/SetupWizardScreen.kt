@@ -30,7 +30,6 @@ import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import com.beeregg2001.komorebi.common.AppStrings
 import com.beeregg2001.komorebi.common.safeRequestFocusWithRetry
-import com.beeregg2001.komorebi.data.SetupConnection
 import com.beeregg2001.komorebi.data.model.StreamSource
 import com.beeregg2001.komorebi.ui.theme.KomorebiTheme
 import com.beeregg2001.komorebi.viewmodel.SetupPage
@@ -40,7 +39,11 @@ import com.beeregg2001.komorebi.viewmodel.SetupViewModel
 internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
     val page = viewModel.page
     val colors = KomorebiTheme.colors
-    val isKonomiConnection = page == SetupPage.MAIN_CONNECTION && viewModel.mainSystem == StreamSource.KONOMITV
+    val connection = when (page) {
+        SetupPage.MAIN_CONNECTION -> viewModel.connection(viewModel.mainSystem)
+        SetupPage.SOURCE_CONNECTION -> viewModel.alternateSource?.let(viewModel::connection)
+        else -> null
+    }
     val skipCloudflare = page == SetupPage.CLOUDFLARE &&
         viewModel.clientId.isBlank() && viewModel.clientSecret.isBlank()
     BackHandler {
@@ -49,7 +52,7 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
 
     Box(
         modifier = Modifier.fillMaxSize().background(colors.background)
-            .then(if (isKonomiConnection) Modifier.imePadding() else Modifier)
+            .then(if (connection != null) Modifier.imePadding() else Modifier)
             .padding(horizontal = 32.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -57,7 +60,7 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
             val initialFocus = remember { FocusRequester() }
             val reusesMainConnection = page == SetupPage.SOURCE_CONNECTION && viewModel.alternateSource == null
             val focusNext = page == SetupPage.WELCOME || reusesMainConnection
-            if (!isKonomiConnection) {
+            if (connection == null) {
                 LaunchedEffect(viewModel.isSaving) {
                     if (!viewModel.isSaving) initialFocus.safeRequestFocusWithRetry("SetupWizard")
                 }
@@ -74,7 +77,7 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                 )
                 Text(
                     when {
-                        isKonomiConnection -> KONOMI_CONNECTION_TITLE
+                        connection != null -> connection.title
                         reusesMainConnection -> "ライブ視聴の接続先"
                         else -> page.title
                     },
@@ -100,13 +103,17 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                             initialFocus = initialFocus,
                             onSelect = { viewModel.mainSystem = it }
                         )
-                        SetupPage.MAIN_CONNECTION -> ConnectionFields(
-                            connection = viewModel.connection(viewModel.mainSystem),
-                            includeHttpPort = true,
-                            initialFocus = initialFocus,
-                            error = viewModel.error,
-                            onChange = viewModel::updateConnection
-                        )
+                        SetupPage.MAIN_CONNECTION, SetupPage.SOURCE_CONNECTION -> {
+                            if (connection == null) {
+                                SetupInstructions("ライブ視聴には、メインシステムで設定した接続先を使用します。")
+                            } else {
+                                ServerConnectionFields(
+                                    connection, viewModel.error,
+                                    showHttpPort = page == SetupPage.MAIN_CONNECTION,
+                                    onChange = viewModel::updateConnection
+                                )
+                            }
+                        }
                         SetupPage.SOURCE -> SetupChoices(
                             options = listOf(
                                 StreamSource.KONOMITV to "メインシステムに従う（トランスコード）",
@@ -121,26 +128,19 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                             initialFocus = initialFocus,
                             onSelect = { viewModel.preferredSource = it }
                         )
-                        SetupPage.SOURCE_CONNECTION -> {
-                            val source = viewModel.alternateSource
-                            if (source == null) {
-                                SetupInstructions("ライブ視聴には、メインシステムで設定した接続先を使用します。")
-                            } else {
-                                ConnectionFields(
-                                    connection = viewModel.connection(source),
-                                    includeHttpPort = false,
-                                    initialFocus = initialFocus,
-                                    onChange = viewModel::updateConnection
-                                )
-                            }
-                        }
                         SetupPage.FILE_LIBRARY -> {
                             SetupInstructions("NASなどのSMBサーバーにある動画をファイルライブラリに追加できます。")
                             val smb = viewModel.smb
                             SetupField("表示名", smb.name, { viewModel.smb = smb.copy(name = it) },
                                 placeholder = "リビングのNAS", focusRequester = initialFocus)
-                            SetupField("ホスト名またはIPアドレス", smb.ip, { viewModel.smb = smb.copy(ip = it) },
-                                placeholder = "192.168.1.10")
+                            ConnectionAddressFields(
+                                host = smb.ip,
+                                manual = viewModel.smbManualAddress,
+                                allowUrl = false
+                            ) { host, manual ->
+                                viewModel.smb = smb.copy(ip = host)
+                                viewModel.smbManualAddress = manual
+                            }
                             SetupField("ポート番号", smb.port, { viewModel.smb = smb.copy(port = it) },
                                 placeholder = "445", keyboardType = KeyboardType.Number)
                             SetupField("ユーザー名（空欄でゲスト接続）", smb.user, { viewModel.smb = smb.copy(user = it) })
@@ -158,7 +158,7 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                     }
                 }
 
-                if (!isKonomiConnection) {
+                if (connection == null) {
                     viewModel.error?.let {
                         Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
                     }
@@ -221,50 +221,6 @@ private fun SetupChoices(
             isSelected = selected == source,
             onClick = { onSelect(source) },
             modifier = if (selected == source) Modifier.focusRequester(initialFocus) else Modifier
-        )
-    }
-}
-
-@Composable
-private fun ConnectionFields(
-    connection: SetupConnection,
-    includeHttpPort: Boolean,
-    initialFocus: FocusRequester,
-    error: String? = null,
-    onChange: (SetupConnection) -> Unit
-) {
-    if (connection.source == StreamSource.KONOMITV) {
-        KonomiConnectionFields(connection.konomi, error) {
-            onChange(connection.copy(host = it.host, port = it.port, manualKonomi = it.manual))
-        }
-        return
-    }
-    val system = when (connection.source) {
-        StreamSource.KONOMITV -> "KonomiTV"
-        StreamSource.EDCB -> "EDCB"
-        StreamSource.EPGSTATION -> "EPGStation"
-        StreamSource.MIRAKURUN -> "Mirakurun"
-    }
-    SetupInstructions("$system の接続先を入力してください。")
-    SetupField(
-        "ホスト名・IPアドレス・URL",
-        connection.host,
-        { onChange(connection.copy(host = it)) },
-        placeholder = "192.168.1.10",
-        focusRequester = initialFocus
-    )
-    SetupField(
-        if (connection.source == StreamSource.EDCB) "TCPポート" else "ポート番号",
-        connection.port,
-        { onChange(connection.copy(port = it)) },
-        keyboardType = KeyboardType.Number
-    )
-    if (includeHttpPort && connection.httpPort != null) {
-        SetupField(
-            "HTTP/HTTPSポート",
-            connection.httpPort,
-            { onChange(connection.copy(httpPort = it)) },
-            keyboardType = KeyboardType.Number
         )
     }
 }

@@ -59,7 +59,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import com.beeregg2001.komorebi.common.AppStrings
 import com.beeregg2001.komorebi.common.safeRequestFocus
-import com.beeregg2001.komorebi.data.KonomiConnection
+import com.beeregg2001.komorebi.data.ConnectionAddress
+import com.beeregg2001.komorebi.data.SetupConnection
 import com.beeregg2001.komorebi.ui.theme.KomorebiTheme
 import com.beeregg2001.komorebi.viewmodel.SettingsViewModel
 import com.beeregg2001.komorebi.viewmodel.SmbServer
@@ -79,7 +80,10 @@ sealed class SettingDialogState {
         val onConfirm: (String) -> Unit
     ) : SettingDialogState()
 
-    internal data class Konomi(val connection: KonomiConnection) : SettingDialogState()
+    internal data class Connection(
+        val connection: SetupConnection,
+        val savedHost: String
+    ) : SettingDialogState()
 
     data class BatchInput(val onConfirm: (String, String) -> Unit) : SettingDialogState()
     data class Selection(
@@ -556,7 +560,9 @@ fun SmbManualInputDialog(
     val colors = KomorebiTheme.colors
     var name by remember { mutableStateOf(target?.name ?: "") }
     var ip by remember { mutableStateOf(target?.ip ?: "") }
-    var port by remember { mutableStateOf(target?.port ?: "445") }
+    var manualAddress by remember { mutableStateOf(ConnectionAddress.usesHostName(ip)) }
+    var addressError by remember { mutableStateOf<String?>(null) }
+    var port by remember { mutableStateOf(target?.port.orEmpty().ifBlank { "445" }) }
     var user by remember { mutableStateOf(target?.user ?: "") }
     var password by remember { mutableStateOf(target?.password ?: "") }
 
@@ -615,18 +621,12 @@ fun SmbManualInputDialog(
                             focusRequester = focusRequester
                         )
                     }
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            "ホスト名またはIPアドレス (必須)",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = colors.textSecondary
-                        )
-                        DialogTextField(
-                            value = ip,
-                            onValueChange = { ip = it },
-                            placeholder = "例: 192.168.1.10"
-                        )
+                    ConnectionAddressFields(ip, manualAddress, allowUrl = false) { host, manual ->
+                        ip = host
+                        manualAddress = manual
+                        addressError = null
                     }
+                    addressError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
                             "ポート番号",
@@ -684,10 +684,12 @@ fun SmbManualInputDialog(
                         ) { Text("キャンセル") }
                         Button(
                             onClick = {
-                                if (name.isNotBlank() && ip.isNotBlank()) {
+                                val error = ConnectionAddress.validationError(ip, manualAddress, allowUrl = false)
+                                addressError = error
+                                if (error == null) {
                                     isClosing = true
                                     val id = target?.id ?: java.util.UUID.randomUUID().toString()
-                                    onConfirm(SmbServer(id, name, ip, port, user, password))
+                                    onConfirm(SmbServer(id, name, ip.trim(), port, user, password))
                                 }
                             },
                             modifier = Modifier.weight(1f),

@@ -34,76 +34,95 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import com.beeregg2001.komorebi.common.safeRequestFocusWithRetry
-import com.beeregg2001.komorebi.data.KonomiConnection
+import com.beeregg2001.komorebi.data.SetupConnection
+import com.beeregg2001.komorebi.data.model.StreamSource
 import com.beeregg2001.komorebi.ui.theme.KomorebiTheme
 import kotlinx.coroutines.flow.first
 
-internal const val KONOMI_CONNECTION_TITLE = "KonomiTV の接続先"
+@Composable
+internal fun ConnectionAddressFields(
+    host: String,
+    manual: Boolean,
+    focusRequester: FocusRequester = remember { FocusRequester() },
+    startEditing: Boolean = false,
+    allowUrl: Boolean = true,
+    onChange: (host: String, manual: Boolean) -> Unit
+) {
+    var alternateHost by remember { mutableStateOf("") }
+    val manualLabel = if (allowUrl) "ホスト名またはURL" else "ホスト名"
+    SetupField(
+        label = if (manual) manualLabel else "IPアドレス",
+        value = host,
+        onChange = { onChange(it, manual) },
+        placeholder = when {
+            !manual -> "192.168.1.10"
+            allowUrl -> "tv.example.com"
+            else -> "nas.local"
+        },
+        focusRequester = focusRequester,
+        keyboardType = if (manual) KeyboardType.Uri else KeyboardType.Decimal,
+        startEditing = startEditing && !manual
+    )
+    MultiSelectionDialogItem(
+        label = if (allowUrl) "ホスト名・URLで入力" else "ホスト名で入力",
+        isSelected = manual,
+        onClick = {
+            val nextHost = alternateHost
+            alternateHost = host
+            onChange(nextHost, !manual)
+        },
+        modifier = Modifier.semantics {
+            role = Role.Checkbox
+            toggleableState = ToggleableState(manual)
+        }
+    )
+}
 
 @Composable
-internal fun KonomiConnectionFields(
-    connection: KonomiConnection,
+internal fun ServerConnectionFields(
+    connection: SetupConnection,
     error: String?,
-    onChange: (KonomiConnection) -> Unit
+    showHttpPort: Boolean = true,
+    onChange: (SetupConnection) -> Unit
 ) {
     val initialFocus = remember { FocusRequester() }
     val windowInfo = LocalWindowInfo.current
-    var alternateHost by remember { mutableStateOf("") }
-
     LaunchedEffect(windowInfo) {
         snapshotFlow { windowInfo.isWindowFocused }.first { it }
         withFrameNanos { }
-        initialFocus.safeRequestFocusWithRetry("KonomiConnection")
+        initialFocus.safeRequestFocusWithRetry("ServerConnection")
     }
 
-    if (!connection.manual) {
-        SetupField(
-            label = "IPアドレス",
-            value = connection.host,
-            onChange = { onChange(connection.copy(host = it)) },
-            placeholder = "192.168.1.10",
-            focusRequester = initialFocus,
-            keyboardType = KeyboardType.Decimal,
-            startEditing = true
-        )
+    ConnectionAddressFields(
+        host = connection.host,
+        manual = connection.manualAddress,
+        focusRequester = initialFocus,
+        startEditing = true
+    ) { host, manual ->
+        onChange(connection.copy(host = host, manualAddress = manual))
     }
     SetupField(
-        label = "ポート番号",
+        label = if (connection.source == StreamSource.EDCB) "TCPポート" else "ポート番号",
         value = connection.port,
         onChange = { onChange(connection.copy(port = it)) },
         keyboardType = KeyboardType.Number
     )
-    MultiSelectionDialogItem(
-        label = "手動設定（FQDN・URL）",
-        isSelected = connection.manual,
-        onClick = {
-            val nextHost = alternateHost
-            alternateHost = connection.host
-            onChange(connection.copy(host = nextHost, manual = !connection.manual))
-        },
-        modifier = Modifier.semantics {
-            role = Role.Checkbox
-            toggleableState = ToggleableState(connection.manual)
-        }
-    )
-    if (connection.manual) {
+    connection.httpPort?.takeIf { showHttpPort }?.let { httpPort ->
         SetupField(
-            label = "FQDN・URL",
-            value = connection.host,
-            onChange = { onChange(connection.copy(host = it)) },
-            placeholder = "tv.example.com",
-            focusRequester = initialFocus,
-            keyboardType = KeyboardType.Uri
+            label = "HTTP/HTTPSポート",
+            value = httpPort,
+            onChange = { onChange(connection.copy(httpPort = it)) },
+            keyboardType = KeyboardType.Number
         )
     }
     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 }
 
 @Composable
-internal fun KonomiConnectionDialog(
-    initial: KonomiConnection,
+internal fun ConnectionEditorDialog(
+    initial: SetupConnection,
     onDismiss: () -> Unit,
-    onConfirm: (KonomiConnection) -> Unit
+    onConfirm: (SetupConnection) -> Unit
 ) {
     var connection by remember { mutableStateOf(initial) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -116,8 +135,8 @@ internal fun KonomiConnectionDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(KONOMI_CONNECTION_TITLE, style = MaterialTheme.typography.headlineSmall)
-                KonomiConnectionFields(connection, error) {
+                Text(connection.title, style = MaterialTheme.typography.headlineSmall)
+                ServerConnectionFields(connection, error) {
                     connection = it
                     error = null
                 }

@@ -8,10 +8,12 @@ import androidx.lifecycle.viewModelScope
 import coil.imageLoader
 import com.beeregg2001.komorebi.data.KonomiOriginalQualityGate
 import com.beeregg2001.komorebi.data.KonomiConnection
+import com.beeregg2001.komorebi.data.SetupConnection
 import com.beeregg2001.komorebi.data.SettingsRepository
 import com.beeregg2001.komorebi.data.local.AppDatabase
 import com.beeregg2001.komorebi.data.sync.RecordSyncEngine
 import com.beeregg2001.komorebi.data.model.StreamQuality
+import com.beeregg2001.komorebi.data.model.StreamSource
 import com.beeregg2001.komorebi.data.repository.RecordProvider
 import com.beeregg2001.komorebi.data.repository.epgstation.EpgStationLiveRepository
 import com.beeregg2001.komorebi.util.AppUpdater
@@ -638,21 +640,6 @@ class SettingsViewModel @Inject constructor(
         forceSyncStreamQualities()
     }
 
-    fun updateEdcbIp(ip: String) = viewModelScope.launch(Dispatchers.IO) {
-        settingsRepository.saveString(
-            SettingsRepository.EDCB_IP,
-            ip
-        ); forceSyncStreamQualities()
-    }
-
-    fun updateEdcbPort(port: String) =
-        viewModelScope.launch(Dispatchers.IO) {
-            settingsRepository.saveString(
-                SettingsRepository.EDCB_PORT,
-                port
-            )
-        }
-
     fun updateEdcbRecordPlayMethod(method: String) = viewModelScope.launch(Dispatchers.IO) {
         settingsRepository.saveString(
             SettingsRepository.EDCB_RECORD_PLAY_METHOD,
@@ -660,33 +647,16 @@ class SettingsViewModel @Inject constructor(
         ); forceSyncStreamQualities()
     }
 
-    fun updateEpgStationIp(ip: String) = viewModelScope.launch(Dispatchers.IO) {
-        val oldIp = settingsRepository.epgStationIp.first()
-        settingsRepository.saveString(SettingsRepository.EPGSTATION_IP, ip)
-        // 接続先が変わったら録画一覧を作り直す必要があるため、全同期をかけ直す
-        if (oldIp.isNotBlank() && oldIp != ip) {
-            syncEngine.launchSyncAllRecords(forceFullSync = true)
-        }
-        forceSyncStreamQualities()
-    }
-
-    fun updateEpgStationPort(port: String) = viewModelScope.launch(Dispatchers.IO) {
-        settingsRepository.saveString(SettingsRepository.EPGSTATION_PORT, port)
-        forceSyncStreamQualities()
-    }
-
-    fun updateMirakurunIp(ip: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            settingsRepository.saveString(
-                SettingsRepository.MIRAKURUN_IP,
-                ip
-            )
-        }
-    }
-
-    internal suspend fun updateKonomiConnection(host: String, port: String) {
-        if (settingsRepository.updateKonomiConnection(host, port)) {
-            syncEngine.launchSyncAllRecords(forceFullSync = true)
+    internal suspend fun updateServerConnection(connection: SetupConnection) = withContext(Dispatchers.IO) {
+        if (!settingsRepository.updateServerConnection(connection)) return@withContext
+        when (connection.source) {
+            StreamSource.KONOMITV -> syncEngine.launchSyncAllRecords(forceFullSync = true)
+            StreamSource.EDCB -> forceSyncStreamQualities()
+            StreamSource.EPGSTATION -> {
+                syncEngine.launchSyncAllRecords(forceFullSync = true)
+                forceSyncStreamQualities()
+            }
+            StreamSource.MIRAKURUN -> Unit
         }
     }
 

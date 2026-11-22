@@ -252,15 +252,13 @@ class SettingsRepository @Inject constructor(
             (preferences[KONOMI_PORT] ?: KonomiConnection.DEFAULT_PORT)
     }
 
-    internal suspend fun updateKonomiConnection(host: String, port: String): Boolean {
+    internal suspend fun updateServerConnection(connection: SetupConnection): Boolean {
+        val (hostKey, portKey) = connection.source.connectionKeys()
         var changed = false
         context.dataStore.edit { preferences ->
-            changed = preferences[KONOMI_IP] != host ||
-                (preferences[KONOMI_PORT] ?: KonomiConnection.DEFAULT_PORT) != port
-            if (changed) {
-                preferences[KONOMI_IP] = host
-                preferences[KONOMI_PORT] = port
-            }
+            changed = preferences[hostKey] != connection.host ||
+                (preferences[portKey] ?: SetupConnection.defaultPort(connection.source)) != connection.port
+            if (changed) preferences.setConnection(connection)
         }
         if (changed) resetConnectionCaches()
         return changed
@@ -311,13 +309,15 @@ class SettingsRepository @Inject constructor(
         emptyList()
     }
 
+    private fun StreamSource.connectionKeys() = when (this) {
+        StreamSource.KONOMITV -> KONOMI_IP to KONOMI_PORT
+        StreamSource.EDCB -> EDCB_IP to EDCB_PORT
+        StreamSource.EPGSTATION -> EPGSTATION_IP to EPGSTATION_PORT
+        StreamSource.MIRAKURUN -> MIRAKURUN_IP to MIRAKURUN_PORT
+    }
+
     private fun MutablePreferences.setConnection(connection: SetupConnection) {
-        val (hostKey, portKey) = when (connection.source) {
-            StreamSource.KONOMITV -> KONOMI_IP to KONOMI_PORT
-            StreamSource.EDCB -> EDCB_IP to EDCB_PORT
-            StreamSource.EPGSTATION -> EPGSTATION_IP to EPGSTATION_PORT
-            StreamSource.MIRAKURUN -> MIRAKURUN_IP to MIRAKURUN_PORT
-        }
+        val (hostKey, portKey) = connection.source.connectionKeys()
         this[hostKey] = connection.host
         this[portKey] = connection.port
         connection.httpPort?.let { this[EDCB_HTTP_PORT] = it }
