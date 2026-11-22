@@ -38,6 +38,8 @@ import com.beeregg2001.komorebi.viewmodel.SetupViewModel
 internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
     val page = viewModel.page
     val colors = KomorebiTheme.colors
+    val skipCloudflare = page == SetupPage.CLOUDFLARE &&
+        viewModel.clientId.isBlank() && viewModel.clientSecret.isBlank()
     BackHandler {
         if (page == SetupPage.WELCOME) onExit() else viewModel.back()
     }
@@ -156,19 +158,20 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                         OutlinedButton(onClick = viewModel::back, enabled = !viewModel.isSaving) { Text("戻る") }
                     }
                     Spacer(Modifier.weight(1f))
-                    if (page == SetupPage.FILE_LIBRARY || page == SetupPage.CLOUDFLARE) {
+                    if (page == SetupPage.FILE_LIBRARY) {
                         OutlinedButton(onClick = { viewModel.next(skip = true) }, enabled = !viewModel.isSaving) {
                             Text("スキップ")
                         }
                     }
                     Button(
-                        onClick = { viewModel.next() },
+                        onClick = { viewModel.next(skip = skipCloudflare) },
                         modifier = if (focusNext) Modifier.focusRequester(initialFocus) else Modifier,
                         enabled = !viewModel.isSaving
                     ) {
                         Text(when {
                             viewModel.isSaving -> "保存中…"
                             page == SetupPage.WELCOME -> "セットアップを始める"
+                            skipCloudflare -> "スキップして完了"
                             page == SetupPage.CLOUDFLARE -> "設定を完了"
                             else -> "次へ"
                         })
