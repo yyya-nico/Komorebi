@@ -268,7 +268,8 @@ internal fun SetupField(
     placeholder: String = "",
     isPassword: Boolean = false,
     focusRequester: FocusRequester = remember { FocusRequester() },
-    keyboardType: KeyboardType = KeyboardType.Text
+    keyboardType: KeyboardType = KeyboardType.Text,
+    startEditing: Boolean = false
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = KomorebiTheme.colors.textSecondary)
@@ -278,7 +279,8 @@ internal fun SetupField(
             placeholder = placeholder,
             isPassword = isPassword,
             focusRequester = focusRequester,
-            keyboardType = keyboardType
+            keyboardType = keyboardType,
+            startEditing = startEditing
         )
     }
 }

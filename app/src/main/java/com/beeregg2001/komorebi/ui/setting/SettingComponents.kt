@@ -45,6 +45,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -271,13 +272,22 @@ fun DialogTextField(
     placeholder: String,
     isPassword: Boolean = false,
     focusRequester: FocusRequester = remember { FocusRequester() },
-    keyboardType: KeyboardType = KeyboardType.Text
+    keyboardType: KeyboardType = KeyboardType.Text,
+    startEditing: Boolean = false
 ) {
     val colors = KomorebiTheme.colors
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
     var isFocused by remember { mutableStateOf(false) }
-    var isEditing by remember { mutableStateOf(false) } // ★ 追加: 決定キーで入力モードへ
+    var isEditing by remember { mutableStateOf(startEditing) }
+
+    LaunchedEffect(isFocused, isEditing, windowFocused) {
+        if (isFocused && isEditing && windowFocused) {
+            withFrameNanos { }
+            keyboardController?.show()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -299,16 +309,16 @@ fun DialogTextField(
             textStyle = TextStyle(color = colors.textPrimary, fontSize = 16.sp),
             cursorBrush = SolidColor(colors.textPrimary),
             visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
-            readOnly = !isEditing, // ★ 追加: 普段は読み取り専用にしてキーボードの自動表示を防ぐ
+            readOnly = !isEditing,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .focusRequester(focusRequester)
                 .onFocusChanged { itState ->
-                    isFocused = itState.isFocused
-                    if (!itState.isFocused) {
-                        isEditing = false // フォーカスが外れたら編集モード解除
+                    if (isFocused && !itState.isFocused) {
+                        isEditing = false
                     }
+                    isFocused = itState.isFocused
                 }
                 .onPreviewKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown) {
@@ -330,8 +340,7 @@ fun DialogTextField(
                             android.view.KeyEvent.KEYCODE_DPAD_CENTER,
                             android.view.KeyEvent.KEYCODE_ENTER,
                             android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                                isEditing = true
-                                keyboardController?.show()
+                                if (isEditing) keyboardController?.show() else isEditing = true
                                 true
                             }
 

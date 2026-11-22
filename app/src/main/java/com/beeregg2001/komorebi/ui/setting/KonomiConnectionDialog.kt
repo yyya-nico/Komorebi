@@ -16,6 +16,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -36,26 +41,45 @@ internal fun KonomiConnectionFields(
     onChange: (KonomiConnection) -> Unit
 ) {
     var alternateHost by remember { mutableStateOf("") }
-    SetupField(
-        label = if (connection.manual) "FQDN・URL" else "IPアドレス",
-        value = connection.host,
-        onChange = { onChange(connection.copy(host = it)) },
-        placeholder = if (connection.manual) "tv.example.com" else "192.168.1.10",
-        focusRequester = initialFocus,
-        keyboardType = if (connection.manual) KeyboardType.Uri else KeyboardType.Decimal
-    )
+    if (!connection.manual) {
+        SetupField(
+            label = "IPアドレス",
+            value = connection.host,
+            onChange = { onChange(connection.copy(host = it)) },
+            placeholder = "192.168.1.10",
+            focusRequester = initialFocus,
+            keyboardType = KeyboardType.Decimal,
+            startEditing = true
+        )
+    }
     SetupField(
         label = "ポート番号",
         value = connection.port,
         onChange = { onChange(connection.copy(port = it)) },
         keyboardType = KeyboardType.Number
     )
-    OutlinedButton(onClick = {
-        val nextHost = alternateHost
-        alternateHost = connection.host
-        onChange(connection.copy(host = nextHost, manual = !connection.manual))
-    }) {
-        Text(if (connection.manual) "IPアドレスで設定する" else "手動設定")
+    MultiSelectionDialogItem(
+        label = "手動設定（FQDN・URL）",
+        isSelected = connection.manual,
+        onClick = {
+            val nextHost = alternateHost
+            alternateHost = connection.host
+            onChange(connection.copy(host = nextHost, manual = !connection.manual))
+        },
+        modifier = Modifier.semantics {
+            role = Role.Checkbox
+            toggleableState = ToggleableState(connection.manual)
+        }
+    )
+    if (connection.manual) {
+        SetupField(
+            label = "FQDN・URL",
+            value = connection.host,
+            onChange = { onChange(connection.copy(host = it)) },
+            placeholder = "tv.example.com",
+            focusRequester = initialFocus,
+            keyboardType = KeyboardType.Uri
+        )
     }
 }
 
