@@ -24,7 +24,6 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
@@ -983,18 +982,10 @@ fun SettingsScreen(
                             prefs.commentFontSize,
                             prefs.commentOpacity,
                             prefs.commentMaxLines,
-                            { t, v ->
-                                val keyboardType = if (t == AppStrings.SETTINGS_INPUT_COMMENT_MAX_LINES) {
-                                    KeyboardType.Number
-                                } else {
-                                    KeyboardType.Decimal
-                                }
-                                uiState.activeDialog = SettingDialogState.Input(t, v, keyboardType = keyboardType) {
+                            { setting, value ->
+                                uiState.activeDialog = SettingDialogState.CommentSlider(setting, value) { newValue ->
                                     scope.launch {
-                                        repository.saveString(
-                                            if (t == AppStrings.SETTINGS_INPUT_COMMENT_SPEED) SettingsRepository.COMMENT_SPEED else if (t == AppStrings.SETTINGS_INPUT_COMMENT_SIZE) SettingsRepository.COMMENT_FONT_SIZE else if (t == AppStrings.SETTINGS_INPUT_COMMENT_OPACITY) SettingsRepository.COMMENT_OPACITY else SettingsRepository.COMMENT_MAX_LINES,
-                                            it
-                                        )
+                                        repository.saveString(setting.preferenceKey, newValue)
                                     }
                                 }
                             },
@@ -1091,6 +1082,13 @@ fun SettingsScreen(
                 keyboardType = state.keyboardType,
                 onDismiss = { closeDialog() },
                 onConfirm = { state.onConfirm(it); closeDialog() })
+
+            is SettingDialogState.CommentSlider -> CommentSliderDialog(
+                setting = state.setting,
+                initialValue = state.initialValue,
+                onDismiss = { closeDialog() },
+                onConfirm = { state.onConfirm(it); closeDialog() }
+            )
 
             is SettingDialogState.Connection -> ConnectionEditorDialog(
                 initial = state.connection,

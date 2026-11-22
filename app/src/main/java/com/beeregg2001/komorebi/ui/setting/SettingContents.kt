@@ -1059,13 +1059,13 @@ fun DisplaySettingsContent(
 }
 
 @Composable
-fun CommentSettingsContent(
+internal fun CommentSettingsContent(
     def: String,
     speed: String,
     size: String,
     opacity: String,
     max: String,
-    onEdit: (String, String) -> Unit,
+    onEdit: (CommentSliderSetting, String) -> Unit,
     onT: () -> Unit,
     defR: FocusRequester,
     spR: FocusRequester,
@@ -1097,7 +1097,7 @@ fun CommentSettingsContent(
                 onClick = { onClick(defR); onT() })
             SettingItem(
                 AppStrings.SETTINGS_ITEM_COMMENT_SPEED,
-                "${speed}x",
+                CommentSliderSetting.SPEED.label(speed),
                 Icons.Default.Speed,
                 modifier = Modifier
                     .focusRequester(spR)
@@ -1107,14 +1107,13 @@ fun CommentSettingsContent(
                         down = szR
                     },
                 onClick = {
-                    onClick(spR); onEdit(
-                    AppStrings.SETTINGS_INPUT_COMMENT_SPEED,
-                    speed
-                )
-                })
+                    onClick(spR)
+                    onEdit(CommentSliderSetting.SPEED, speed)
+                }
+            )
             SettingItem(
                 AppStrings.SETTINGS_ITEM_COMMENT_SIZE,
-                "${size}x",
+                CommentSliderSetting.SIZE.label(size),
                 Icons.Default.TextFormat,
                 modifier = Modifier
                     .focusRequester(szR)
@@ -1124,14 +1123,13 @@ fun CommentSettingsContent(
                         down = opR
                     },
                 onClick = {
-                    onClick(szR); onEdit(
-                    AppStrings.SETTINGS_INPUT_COMMENT_SIZE,
-                    size
-                )
-                })
+                    onClick(szR)
+                    onEdit(CommentSliderSetting.SIZE, size)
+                }
+            )
             SettingItem(
                 AppStrings.SETTINGS_ITEM_COMMENT_OPACITY,
-                opacity,
+                CommentSliderSetting.OPACITY.label(opacity),
                 Icons.Default.Opacity,
                 modifier = Modifier
                     .focusRequester(opR)
@@ -1141,14 +1139,13 @@ fun CommentSettingsContent(
                         down = mxR
                     },
                 onClick = {
-                    onClick(opR); onEdit(
-                    AppStrings.SETTINGS_INPUT_COMMENT_OPACITY,
-                    opacity
-                )
-                })
+                    onClick(opR)
+                    onEdit(CommentSliderSetting.OPACITY, opacity)
+                }
+            )
             SettingItem(
                 AppStrings.SETTINGS_ITEM_COMMENT_MAX_LINES,
-                max,
+                CommentSliderSetting.MAX_LINES.label(max),
                 Icons.Default.VerticalAlignTop,
                 modifier = Modifier
                     .focusRequester(mxR)
@@ -1158,11 +1155,10 @@ fun CommentSettingsContent(
                         down = FocusRequester.Cancel
                     },
                 onClick = {
-                    onClick(mxR); onEdit(
-                    AppStrings.SETTINGS_INPUT_COMMENT_MAX_LINES,
-                    max
-                )
-                })
+                    onClick(mxR)
+                    onEdit(CommentSliderSetting.MAX_LINES, max)
+                }
+            )
         }
     }
 }

@@ -80,6 +80,12 @@ sealed class SettingDialogState {
         val onConfirm: (String) -> Unit
     ) : SettingDialogState()
 
+    internal data class CommentSlider(
+        val setting: CommentSliderSetting,
+        val initialValue: String,
+        val onConfirm: (String) -> Unit
+    ) : SettingDialogState()
+
     internal data class Connection(
         val connection: SetupConnection,
         val savedHost: String
