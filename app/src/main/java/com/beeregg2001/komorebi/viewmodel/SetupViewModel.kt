@@ -39,6 +39,7 @@ internal class SetupViewModel @Inject constructor(
     var preferredSource by mutableStateOf(StreamSource.KONOMITV)
     var smb by mutableStateOf(SmbServer(name = "", ip = "", port = "445", user = "", password = ""))
     var smbManualAddress by mutableStateOf(false)
+        private set
     var clientId by mutableStateOf("")
     var clientSecret by mutableStateOf("")
     var isSaving by mutableStateOf(false)
@@ -47,6 +48,8 @@ internal class SetupViewModel @Inject constructor(
         private set
 
     private var addSmb = false
+    private val editedConnectionHosts = mutableSetOf<StreamSource>()
+    private var smbHostEdited = false
     private val connections = mutableStateMapOf(
         StreamSource.KONOMITV to SetupConnection(StreamSource.KONOMITV),
         StreamSource.EDCB to SetupConnection(StreamSource.EDCB, httpPort = "5510"),
@@ -75,7 +78,18 @@ internal class SetupViewModel @Inject constructor(
     fun connection(source: StreamSource): SetupConnection = connections.getValue(source)
 
     fun updateConnection(connection: SetupConnection) {
+        val previous = connections.getValue(connection.source)
+        if (connection.host != previous.host || connection.manualAddress != previous.manualAddress) {
+            editedConnectionHosts.add(connection.source)
+        }
         connections[connection.source] = connection
+        error = null
+    }
+
+    fun updateSmbAddress(host: String, manual: Boolean) {
+        smbHostEdited = true
+        smb = smb.copy(ip = host)
+        smbManualAddress = manual
         error = null
     }
 
@@ -102,7 +116,31 @@ internal class SetupViewModel @Inject constructor(
             finish(skip)
         } else {
             if (page == SetupPage.FILE_LIBRARY) addSmb = !skip
-            page = SetupPage.entries[page.ordinal + 1]
+            val nextPage = SetupPage.entries[page.ordinal + 1]
+            prefillAddress(nextPage)
+            page = nextPage
+        }
+    }
+
+    private fun prefillAddress(page: SetupPage) {
+        val main = connection(mainSystem)
+        when (page) {
+            SetupPage.SOURCE_CONNECTION -> {
+                val source = alternateSource ?: return
+                if (source !in editedConnectionHosts) {
+                    connections[source] = connection(source).copy(
+                        host = main.host.trim(),
+                        manualAddress = main.manualAddress
+                    )
+                }
+            }
+            SetupPage.FILE_LIBRARY -> if (!smbHostEdited) {
+                val previous = alternateSource?.let(::connection) ?: main
+                val host = ConnectionAddress.hostForSmb(previous.host)
+                smb = smb.copy(ip = host)
+                smbManualAddress = ConnectionAddress.usesHostName(host)
+            }
+            else -> Unit
         }
     }
 

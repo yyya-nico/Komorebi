@@ -110,6 +110,7 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                                 ServerConnectionFields(
                                     connection, viewModel.error,
                                     showHttpPort = page == SetupPage.MAIN_CONNECTION,
+                                    startEditing = connection.host.isBlank(),
                                     onChange = viewModel::updateConnection
                                 )
                             }
@@ -136,11 +137,9 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                             ConnectionAddressFields(
                                 host = smb.ip,
                                 manual = viewModel.smbManualAddress,
-                                allowUrl = false
-                            ) { host, manual ->
-                                viewModel.smb = smb.copy(ip = host)
-                                viewModel.smbManualAddress = manual
-                            }
+                                allowUrl = false,
+                                onChange = viewModel::updateSmbAddress
+                            )
                             SetupField("ポート番号", smb.port, { viewModel.smb = smb.copy(port = it) },
                                 placeholder = "445", keyboardType = KeyboardType.Number)
                             SetupField("ユーザー名（空欄でゲスト接続）", smb.user, { viewModel.smb = smb.copy(user = it) })

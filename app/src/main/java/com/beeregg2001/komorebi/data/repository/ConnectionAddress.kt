@@ -15,6 +15,14 @@ internal object ConnectionAddress {
     fun hasHttpScheme(value: String): Boolean =
         value.startsWith("http://", ignoreCase = true) || value.startsWith("https://", ignoreCase = true)
 
+    fun hostForSmb(value: String): String {
+        val address = value.trim()
+        if (isIpv4(address)) return address
+        val url = if (hasHttpScheme(address)) address else "http://$address"
+        val host = url.toHttpUrlOrNull()?.host.orEmpty()
+        return if (':' in host) "[$host]" else host
+    }
+
     fun validationError(host: String, manual: Boolean, allowUrl: Boolean = true): String? {
         val address = host.trim()
         if (!manual) {

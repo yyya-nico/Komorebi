@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -49,26 +50,40 @@ internal fun ConnectionAddressFields(
     onChange: (host: String, manual: Boolean) -> Unit
 ) {
     var alternateHost by remember { mutableStateOf("") }
+    var hasSwitchedMode by remember { mutableStateOf(false) }
+    val windowInfo = LocalWindowInfo.current
+    LaunchedEffect(manual, windowInfo) {
+        if (hasSwitchedMode) {
+            snapshotFlow { windowInfo.isWindowFocused }.first { it }
+            withFrameNanos { }
+            focusRequester.safeRequestFocusWithRetry("ConnectionAddress")
+        }
+    }
+
     val manualLabel = if (allowUrl) "ホスト名またはURL" else "ホスト名"
-    SetupField(
-        label = if (manual) manualLabel else "IPアドレス",
-        value = host,
-        onChange = { onChange(it, manual) },
-        placeholder = when {
-            !manual -> "192.168.1.10"
-            allowUrl -> "tv.example.com"
-            else -> "nas.local"
-        },
-        focusRequester = focusRequester,
-        keyboardType = if (manual) KeyboardType.Uri else KeyboardType.Decimal,
-        startEditing = startEditing && !manual
-    )
+    // 入力モードごとにテキスト欄を作り直し、IMEの入力セッションを切り替える。
+    key(manual) {
+        SetupField(
+            label = if (manual) manualLabel else "IPアドレス",
+            value = host,
+            onChange = { onChange(it, manual) },
+            placeholder = when {
+                !manual -> "192.168.1.10"
+                allowUrl -> "tv.example.com"
+                else -> "nas.local"
+            },
+            focusRequester = focusRequester,
+            keyboardType = if (manual) KeyboardType.Text else KeyboardType.Decimal,
+            startEditing = hasSwitchedMode || (startEditing && !manual)
+        )
+    }
     MultiSelectionDialogItem(
         label = if (allowUrl) "ホスト名・URLで入力" else "ホスト名で入力",
         isSelected = manual,
         onClick = {
             val nextHost = alternateHost
             alternateHost = host
+            hasSwitchedMode = true
             onChange(nextHost, !manual)
         },
         modifier = Modifier.semantics {
@@ -83,6 +98,7 @@ internal fun ServerConnectionFields(
     connection: SetupConnection,
     error: String?,
     showHttpPort: Boolean = true,
+    startEditing: Boolean = true,
     onChange: (SetupConnection) -> Unit
 ) {
     val initialFocus = remember { FocusRequester() }
@@ -97,7 +113,7 @@ internal fun ServerConnectionFields(
         host = connection.host,
         manual = connection.manualAddress,
         focusRequester = initialFocus,
-        startEditing = true
+        startEditing = startEditing
     ) { host, manual ->
         onChange(connection.copy(host = host, manualAddress = manual))
     }
