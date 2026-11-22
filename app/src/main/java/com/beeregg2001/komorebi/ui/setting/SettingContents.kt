@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.*
 import com.beeregg2001.komorebi.common.AppStrings
+import com.beeregg2001.komorebi.data.KonomiConnection
 import com.beeregg2001.komorebi.data.model.StreamQuality
 import com.beeregg2001.komorebi.ui.theme.KomorebiTheme
 import com.beeregg2001.komorebi.util.UpdateState
@@ -270,6 +271,7 @@ fun ConnectionSettingsContent(
     edcbPlayMethodR: FocusRequester,
     cfClientId: String,
     cfClientSecret: String,
+    onEditKonomi: () -> Unit,
     onEdit: (String, String) -> Unit,
     onSelectBackend: () -> Unit,
     onSelectSrc: () -> Unit,
@@ -344,23 +346,25 @@ fun ConnectionSettingsContent(
                 onClick = { onClick(backendTypeR); onSelectBackend() }
             )
 
+            val isKonomi = backendLabel == "KonomiTV"
+            val konomi = remember(kIp, kPort) { KonomiConnection.fromSaved(kIp, kPort) }
             val currentIp = when (backendType) {
                 "EDCB" -> edcbIp
                 "EPGSTATION" -> epgStationIp
                 "MIRAKURUN_ONLY" -> mIp
-                else -> kIp
+                else -> konomi.host
             }
             val currentPort = when (backendType) {
                 "EDCB" -> edcbPort
                 "EPGSTATION" -> epgStationPort
                 "MIRAKURUN_ONLY" -> mPort
-                else -> kPort
+                else -> konomi.port
             }
             val ipTitle = when (backendType) {
                 "EDCB" -> "EDCB (IPアドレス)"
                 "EPGSTATION" -> "EPGStation (IPアドレス)"
                 "MIRAKURUN_ONLY" -> "Mirakurun (IPアドレス)"
-                else -> "KonomiTV (IPアドレス)"
+                else -> if (konomi.manual) "KonomiTV (FQDN・URL)" else "KonomiTV (IPアドレス)"
             }
             val portTitle = when (backendType) {
                 "EDCB" -> "EDCB (TCPポート)"
@@ -377,7 +381,10 @@ fun ConnectionSettingsContent(
                 modifier = Modifier
                     .focusRequester(backendIpR)
                     .focusProperties { left = sidebarR; up = backendTypeR; down = backendPortR },
-                onClick = { onClick(backendIpR); onEdit(ipTitle, currentIp) }
+                onClick = {
+                    onClick(backendIpR)
+                    if (isKonomi) onEditKonomi() else onEdit(ipTitle, currentIp)
+                }
             )
             SettingItem(
                 title = portTitle,
@@ -390,7 +397,10 @@ fun ConnectionSettingsContent(
                         down =
                             if (backendType == "EDCB") edcbHttpPortR else if (backendType != "MIRAKURUN_ONLY") prefSrcR else addSmbR
                     },
-                onClick = { onClick(backendPortR); onEdit(portTitle, currentPort) }
+                onClick = {
+                    onClick(backendPortR)
+                    if (isKonomi) onEditKonomi() else onEdit(portTitle, currentPort)
+                }
             )
             if (backendType == "EDCB") {
                 SettingItem(
@@ -508,7 +518,7 @@ fun ConnectionSettingsContent(
                             .focusProperties {
                                 left = sidebarR; up = overrideIpR; down = addSmbR
                             },
-                        onClick = { onClick(overridePortR); onEdit("EDCB (ポート)", edcbPort) }
+                        onClick = { onClick(overridePortR); onEdit("EDCB (TCPポート)", edcbPort) }
                     )
 
                     if (edcbIp.isBlank() || edcbPort.isBlank()) {

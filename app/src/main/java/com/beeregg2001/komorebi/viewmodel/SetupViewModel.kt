@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.beeregg2001.komorebi.data.KonomiConnection
 import com.beeregg2001.komorebi.data.SettingsRepository
 import com.beeregg2001.komorebi.data.SetupConnection
 import com.beeregg2001.komorebi.data.model.StreamSource
@@ -47,7 +48,7 @@ internal class SetupViewModel @Inject constructor(
 
     private var addSmb = false
     private val connections = mutableStateMapOf(
-        StreamSource.KONOMITV to SetupConnection(StreamSource.KONOMITV, "", "7000"),
+        StreamSource.KONOMITV to SetupConnection(StreamSource.KONOMITV, "", KonomiConnection.DEFAULT_PORT),
         StreamSource.EDCB to SetupConnection(StreamSource.EDCB, "", "4510", "5510"),
         StreamSource.EPGSTATION to SetupConnection(StreamSource.EPGSTATION, "", "8888"),
         StreamSource.MIRAKURUN to SetupConnection(StreamSource.MIRAKURUN, "", "40772")
@@ -106,10 +107,10 @@ internal class SetupViewModel @Inject constructor(
     }
 
     private fun connectionError(connection: SetupConnection, includeHttpPort: Boolean): String? {
+        if (connection.source == StreamSource.KONOMITV) return connection.konomi.validationError()
         val host = connection.host.trim()
         val url = if (host.contains("://")) host else "http://$host"
-        if (host.isEmpty() || host.equals(SettingsRepository.KONOMI_PLACEHOLDER_HOST, ignoreCase = true) ||
-            host.any { it.isWhitespace() } || url.toHttpUrlOrNull() == null
+        if (host.isEmpty() || host.any { it.isWhitespace() } || url.toHttpUrlOrNull() == null
         ) {
             return "有効なホスト名、IPアドレス、またはURLを入力してください。"
         }
@@ -131,7 +132,7 @@ internal class SetupViewModel @Inject constructor(
         value.trim().toIntOrNull()?.let { it in 1..65535 } == true
 
     private fun SetupConnection.normalized(includeHttpPort: Boolean) = copy(
-        host = host.trim(),
+        host = if (source == StreamSource.KONOMITV) konomi.storageHost() else host.trim(),
         port = port.trim(),
         httpPort = httpPort?.trim()?.takeIf { includeHttpPort }
     )

@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.tv.material3.*
@@ -34,6 +35,7 @@ fun InputDialog(
     initialValue: String,
     isLongToken: Boolean = false,
     placeholder: String? = null,
+    keyboardType: KeyboardType = KeyboardType.Text,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
 ) {
@@ -109,7 +111,7 @@ fun InputDialog(
                         fontWeight = FontWeight.Medium
                     ),
                     interactionSource = textFieldInteractionSource,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done),
                     // 完了キーで保存ボタンへ移動
                     keyboardActions = KeyboardActions(
                         onDone = {

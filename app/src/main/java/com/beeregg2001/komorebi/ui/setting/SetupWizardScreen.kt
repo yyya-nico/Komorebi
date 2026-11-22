@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
@@ -130,7 +131,7 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                             SetupField("ホスト名またはIPアドレス", smb.ip, { viewModel.smb = smb.copy(ip = it) },
                                 placeholder = "192.168.1.10")
                             SetupField("ポート番号", smb.port, { viewModel.smb = smb.copy(port = it) },
-                                placeholder = "445")
+                                placeholder = "445", keyboardType = KeyboardType.Number)
                             SetupField("ユーザー名（空欄でゲスト接続）", smb.user, { viewModel.smb = smb.copy(user = it) })
                             SetupField("パスワード", smb.password, { viewModel.smb = smb.copy(password = it) },
                                 isPassword = true)
@@ -225,6 +226,12 @@ private fun ConnectionFields(
         StreamSource.MIRAKURUN -> "Mirakurun"
     }
     SetupInstructions("$system の接続先を入力してください。")
+    if (connection.source == StreamSource.KONOMITV) {
+        KonomiConnectionFields(connection.konomi, initialFocus) {
+            onChange(connection.copy(host = it.host, port = it.port, manualKonomi = it.manual))
+        }
+        return
+    }
     SetupField(
         "ホスト名・IPアドレス・URL",
         connection.host,
@@ -235,10 +242,16 @@ private fun ConnectionFields(
     SetupField(
         if (connection.source == StreamSource.EDCB) "TCPポート" else "ポート番号",
         connection.port,
-        { onChange(connection.copy(port = it)) }
+        { onChange(connection.copy(port = it)) },
+        keyboardType = KeyboardType.Number
     )
     if (includeHttpPort && connection.httpPort != null) {
-        SetupField("HTTP/HTTPSポート", connection.httpPort, { onChange(connection.copy(httpPort = it)) })
+        SetupField(
+            "HTTP/HTTPSポート",
+            connection.httpPort,
+            { onChange(connection.copy(httpPort = it)) },
+            keyboardType = KeyboardType.Number
+        )
     }
 }
 
@@ -248,13 +261,14 @@ private fun SetupInstructions(text: String) {
 }
 
 @Composable
-private fun SetupField(
+internal fun SetupField(
     label: String,
     value: String,
     onChange: (String) -> Unit,
     placeholder: String = "",
     isPassword: Boolean = false,
-    focusRequester: FocusRequester = remember { FocusRequester() }
+    focusRequester: FocusRequester = remember { FocusRequester() },
+    keyboardType: KeyboardType = KeyboardType.Text
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = KomorebiTheme.colors.textSecondary)
@@ -263,7 +277,8 @@ private fun SetupField(
             onValueChange = onChange,
             placeholder = placeholder,
             isPassword = isPassword,
-            focusRequester = focusRequester
+            focusRequester = focusRequester,
+            keyboardType = keyboardType
         )
     }
 }

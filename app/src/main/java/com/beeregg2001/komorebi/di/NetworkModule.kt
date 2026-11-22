@@ -11,7 +11,6 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -111,8 +110,7 @@ object NetworkModule {
                 // 向くため、APIとストリームで別々の壊れ方をする非対称な状態だった)。
                 // EPGStation側で実績のあるUrlBuilder.formatBaseUrl()に統一する。
                 val baseUrlString = runBlocking {
-                    val ip = settingsRepository.konomiIp.first()
-                    val port = settingsRepository.konomiPort.first()
+                    val (ip, port) = settingsRepository.getKonomiEndpoint()
                     UrlBuilder.formatBaseUrl(ip, port, "http")
                 }
                 val newUrl = baseUrlString.toHttpUrlOrNull() ?: originalRequest.url

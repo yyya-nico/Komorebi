@@ -71,8 +71,7 @@ class KonomiRepository @Inject constructor(
                 order = "desc"
             )
 
-            val ip = settingsRepository.konomiIp.first()
-            val port = settingsRepository.konomiPort.first()
+            val (ip, port) = settingsRepository.getKonomiEndpoint()
             val updatedPrograms = response.recordedPrograms.map { program ->
                 val fallbackUrl =
                     UrlBuilder.getThumbnailUrl("KONOMITV", ip, port, program.id.toString())
@@ -90,8 +89,7 @@ class KonomiRepository @Inject constructor(
     override suspend fun getRecordedProgram(videoId: Int): Result<RecordedProgram> {
         return try {
             val program = apiService.getRecordedProgram(videoId)
-            val ip = settingsRepository.konomiIp.first()
-            val port = settingsRepository.konomiPort.first()
+            val (ip, port) = settingsRepository.getKonomiEndpoint()
             val fallbackUrl =
                 UrlBuilder.getThumbnailUrl("KONOMITV", ip, port, program.id.toString())
             Result.success(program.copy(apiThumbnailUrl = fallbackUrl))
@@ -130,8 +128,7 @@ class KonomiRepository @Inject constructor(
 
     // ★ 追加: KonomiTV仕様のタイル画像URLを生成
     override suspend fun getTiledThumbnailUrl(videoId: Int): String? {
-        val ip = settingsRepository.konomiIp.first()
-        val port = settingsRepository.konomiPort.first()
+        val (ip, port) = settingsRepository.getKonomiEndpoint()
         // 既存の UrlBuilder.getTiledThumbnailUrl をそのまま利用します
         return UrlBuilder.getTiledThumbnailUrl(ip, port, videoId)
     }
@@ -299,8 +296,7 @@ class KonomiRepository @Inject constructor(
         quality: String,
         streamNumber: Int
     ): String {
-        val ip = settingsRepository.konomiIp.first()
-        val port = settingsRepository.konomiPort.first()
+        val (ip, port) = settingsRepository.getKonomiEndpoint()
         return UrlBuilder.getKonomiTvLiveStreamUrl(ip, port, channelId, quality)
     }
 
@@ -318,8 +314,7 @@ class KonomiRepository @Inject constructor(
 
             UrlBuilder.getMirakurunLogoUrl(ip, port, nid, sid)
         } else {
-            val ip = settingsRepository.konomiIp.first()
-            val port = settingsRepository.konomiPort.first()
+            val (ip, port) = settingsRepository.getKonomiEndpoint()
             UrlBuilder.getKonomiTvLogoUrl(ip, port, channelId)
         }
     }
@@ -330,8 +325,7 @@ class KonomiRepository @Inject constructor(
         sessionId: String,
         offsetSec: Double
     ): String {
-        val ip = settingsRepository.konomiIp.first()
-        val port = settingsRepository.konomiPort.first()
+        val (ip, port) = settingsRepository.getKonomiEndpoint()
         // ★ 追加: original画質はHLS(VideoEncodingTask)を経由せず、録画ファイルダウンロードAPIを
         // 生MPEG-TS直接再生ソースとしてそのまま使う(KonomiTVサーバー側もoriginal指定時はHLS系
         // APIを422で拒否する実装になっている)。session_id/offsetSecはHLS専用のため使用しない。

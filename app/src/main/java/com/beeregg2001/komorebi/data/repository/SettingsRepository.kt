@@ -156,7 +156,7 @@ class SettingsRepository @Inject constructor(
     val epgStationPort: Flow<String> = context.dataStore.data.map { it[EPGSTATION_PORT] ?: "8888" }
     val konomiIp: Flow<String> =
         context.dataStore.data.map { it[KONOMI_IP] ?: KONOMI_PLACEHOLDER_HOST }
-    val konomiPort: Flow<String> = context.dataStore.data.map { it[KONOMI_PORT] ?: "7000" }
+    val konomiPort: Flow<String> = context.dataStore.data.map { it[KONOMI_PORT] ?: KonomiConnection.DEFAULT_PORT }
     val mirakurunIp: Flow<String> = context.dataStore.data.map { it[MIRAKURUN_IP] ?: "" }
     val mirakurunPort: Flow<String> = context.dataStore.data.map { it[MIRAKURUN_PORT] ?: "40772" }
     val preferredStreamSource: Flow<String> =
@@ -246,6 +246,26 @@ class SettingsRepository @Inject constructor(
         }
     }
 
+    internal suspend fun getKonomiEndpoint(): Pair<String, String> {
+        val preferences = context.dataStore.data.first()
+        return (preferences[KONOMI_IP] ?: KONOMI_PLACEHOLDER_HOST) to
+            (preferences[KONOMI_PORT] ?: KonomiConnection.DEFAULT_PORT)
+    }
+
+    internal suspend fun updateKonomiConnection(host: String, port: String): Boolean {
+        var changed = false
+        context.dataStore.edit { preferences ->
+            changed = preferences[KONOMI_IP] != host ||
+                (preferences[KONOMI_PORT] ?: KonomiConnection.DEFAULT_PORT) != port
+            if (changed) {
+                preferences[KONOMI_IP] = host
+                preferences[KONOMI_PORT] = port
+            }
+        }
+        if (changed) resetConnectionCaches()
+        return changed
+    }
+
     internal suspend fun completeInitialSetup(
         main: SetupConnection,
         preferredSource: StreamSource,
@@ -322,7 +342,7 @@ class SettingsRepository @Inject constructor(
         when (source) {
             com.beeregg2001.komorebi.data.model.StreamSource.KONOMITV -> {
                 ip = prefs[KONOMI_IP] ?: ""
-                port = prefs[KONOMI_PORT] ?: "7000"
+                port = prefs[KONOMI_PORT] ?: KonomiConnection.DEFAULT_PORT
             }
 
             com.beeregg2001.komorebi.data.model.StreamSource.MIRAKURUN -> {
@@ -401,7 +421,7 @@ class SettingsRepository @Inject constructor(
         val prefs = context.dataStore.data.first()
         return when (source) {
             com.beeregg2001.komorebi.data.model.StreamSource.KONOMITV -> com.beeregg2001.komorebi.data.model.BackendConfig.KonomiTv(
-                ip = prefs[KONOMI_IP] ?: "", port = prefs[KONOMI_PORT] ?: "7000"
+                ip = prefs[KONOMI_IP] ?: "", port = prefs[KONOMI_PORT] ?: KonomiConnection.DEFAULT_PORT
             )
 
             com.beeregg2001.komorebi.data.model.StreamSource.MIRAKURUN -> com.beeregg2001.komorebi.data.model.BackendConfig.Mirakurun(

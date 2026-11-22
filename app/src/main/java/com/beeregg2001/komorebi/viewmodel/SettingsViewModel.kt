@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coil.imageLoader
 import com.beeregg2001.komorebi.data.KonomiOriginalQualityGate
+import com.beeregg2001.komorebi.data.KonomiConnection
 import com.beeregg2001.komorebi.data.SettingsRepository
 import com.beeregg2001.komorebi.data.local.AppDatabase
 import com.beeregg2001.komorebi.data.sync.RecordSyncEngine
@@ -227,12 +228,12 @@ class SettingsViewModel @Inject constructor(
     val konomiIp: StateFlow<String> = settingsRepository.konomiIp.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
-        "https://192-168-xxx-xxx.local.konomi.tv"
+        SettingsRepository.KONOMI_PLACEHOLDER_HOST
     )
     val konomiPort: StateFlow<String> = settingsRepository.konomiPort.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
-        "7000"
+        KonomiConnection.DEFAULT_PORT
     )
     val commentSpeed: StateFlow<String> = settingsRepository.commentSpeed.stateIn(
         viewModelScope,
@@ -683,23 +684,9 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun updateKonomiIp(ip: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val oldIp = settingsRepository.konomiIp.first()
-            settingsRepository.saveString(SettingsRepository.KONOMI_IP, ip)
-            if (oldIp != ip && (oldIp != "" && oldIp != "https://192-168-xxx-xxx.local.konomi.tv")) {
-                syncEngine.launchSyncAllRecords(forceFullSync = true)
-            }
-        }
-    }
-
-    fun updateKonomiPort(port: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val oldPort = settingsRepository.konomiPort.first()
-            settingsRepository.saveString(SettingsRepository.KONOMI_PORT, port)
-            if (oldPort != port && (oldPort != "" && oldPort != "7000")) {
-                syncEngine.launchSyncAllRecords(forceFullSync = true)
-            }
+    internal suspend fun updateKonomiConnection(host: String, port: String) {
+        if (settingsRepository.updateKonomiConnection(host, port)) {
+            syncEngine.launchSyncAllRecords(forceFullSync = true)
         }
     }
 

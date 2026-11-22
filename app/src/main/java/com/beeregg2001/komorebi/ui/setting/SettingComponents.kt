@@ -48,6 +48,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -57,6 +58,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import com.beeregg2001.komorebi.common.AppStrings
 import com.beeregg2001.komorebi.common.safeRequestFocus
+import com.beeregg2001.komorebi.data.KonomiConnection
 import com.beeregg2001.komorebi.ui.theme.KomorebiTheme
 import com.beeregg2001.komorebi.viewmodel.SettingsViewModel
 import com.beeregg2001.komorebi.viewmodel.SmbServer
@@ -72,8 +74,11 @@ sealed class SettingDialogState {
         val initialValue: String,
         val isLongToken: Boolean = false,
         val placeholder: String? = null,
+        val keyboardType: KeyboardType = KeyboardType.Text,
         val onConfirm: (String) -> Unit
     ) : SettingDialogState()
+
+    internal data class Konomi(val connection: KonomiConnection) : SettingDialogState()
 
     data class BatchInput(val onConfirm: (String, String) -> Unit) : SettingDialogState()
     data class Selection(
@@ -265,7 +270,8 @@ fun DialogTextField(
     onValueChange: (String) -> Unit,
     placeholder: String,
     isPassword: Boolean = false,
-    focusRequester: FocusRequester = remember { FocusRequester() }
+    focusRequester: FocusRequester = remember { FocusRequester() },
+    keyboardType: KeyboardType = KeyboardType.Text
 ) {
     val colors = KomorebiTheme.colors
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -345,7 +351,7 @@ fun DialogTextField(
                     } else false
                 },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = {
                 isEditing = false
                 keyboardController?.hide()
@@ -602,7 +608,7 @@ fun SmbManualInputDialog(
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            "IPアドレス (必須)",
+                            "ホスト名またはIPアドレス (必須)",
                             style = MaterialTheme.typography.labelMedium,
                             color = colors.textSecondary
                         )
@@ -621,7 +627,8 @@ fun SmbManualInputDialog(
                         DialogTextField(
                             value = port,
                             onValueChange = { port = it },
-                            placeholder = "例: 445"
+                            placeholder = "例: 445",
+                            keyboardType = KeyboardType.Number
                         )
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -6,5 +6,8 @@ internal data class SetupConnection(
     val source: StreamSource,
     val host: String,
     val port: String,
-    val httpPort: String? = null
-)
+    val httpPort: String? = null,
+    val manualKonomi: Boolean = false
+) {
+    val konomi get() = KonomiConnection(host, port, manualKonomi)
+}

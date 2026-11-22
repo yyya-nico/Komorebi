@@ -24,11 +24,13 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import com.beeregg2001.komorebi.common.safeRequestFocus
 import com.beeregg2001.komorebi.common.AppStrings
+import com.beeregg2001.komorebi.data.KonomiConnection
 import com.beeregg2001.komorebi.data.SettingsRepository
 import com.beeregg2001.komorebi.data.model.StreamQuality
 import com.beeregg2001.komorebi.ui.components.GlobalToast
@@ -45,6 +47,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import java.io.IOException
 import java.time.LocalTime
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -433,10 +436,20 @@ fun SettingsScreen(
                             edcbPlayMethodR,
                             prefs.cfAccessClientId,
                             prefs.cfAccessClientSecret,
+                            {
+                                uiState.activeDialog = SettingDialogState.Konomi(
+                                    KonomiConnection.fromSaved(prefs.konomiIp, prefs.konomiPort)
+                                )
+                            },
                             { t, v ->
                                 uiState.activeDialog = SettingDialogState.Input(
                                     title = t,
                                     initialValue = v,
+                                    keyboardType = when (t) {
+                                        "EDCB (TCPポート)", "Mirakurun (ポート)", "EPGStation (ポート)" ->
+                                            KeyboardType.Number
+                                        else -> KeyboardType.Text
+                                    },
                                     isLongToken = t == AppStrings.SETTINGS_INPUT_CF_CLIENT_ID || t == AppStrings.SETTINGS_INPUT_CF_CLIENT_SECRET,
                                     placeholder = when (t) {
                                         AppStrings.SETTINGS_INPUT_CF_CLIENT_ID -> AppStrings.SETTINGS_PLACEHOLDER_CF_CLIENT_ID
@@ -452,16 +465,6 @@ fun SettingsScreen(
                                                 input.replace(Regex("\\s+"), "")
                                             else input
                                         when (t) {
-                                            "KonomiTV (IPアドレス)" -> repository.saveString(
-                                                SettingsRepository.KONOMI_IP,
-                                                sanitizedInput
-                                            )
-
-                                            "KonomiTV (ポート)" -> repository.saveString(
-                                                SettingsRepository.KONOMI_PORT,
-                                                sanitizedInput
-                                            )
-
                                             "EDCB (IPアドレス)" -> repository.saveString(
                                                 SettingsRepository.EDCB_IP,
                                                 sanitizedInput
@@ -509,8 +512,6 @@ fun SettingsScreen(
                                         }
                                     }
                                     when (t) {
-                                        "KonomiTV (IPアドレス)" -> viewModel.updateKonomiIp(input)
-                                        "KonomiTV (ポート)" -> viewModel.updateKonomiPort(input)
                                         "EDCB (IPアドレス)" -> viewModel.updateEdcbIp(input)
                                         "EDCB (TCPポート)" -> viewModel.updateEdcbPort(input)
                                         "Mirakurun (IPアドレス)" -> viewModel.updateMirakurunIp(
@@ -1021,7 +1022,12 @@ fun SettingsScreen(
                             prefs.commentOpacity,
                             prefs.commentMaxLines,
                             { t, v ->
-                                uiState.activeDialog = SettingDialogState.Input(t, v) {
+                                val keyboardType = if (t == AppStrings.SETTINGS_INPUT_COMMENT_MAX_LINES) {
+                                    KeyboardType.Number
+                                } else {
+                                    KeyboardType.Decimal
+                                }
+                                uiState.activeDialog = SettingDialogState.Input(t, v, keyboardType = keyboardType) {
                                     scope.launch {
                                         repository.saveString(
                                             if (t == AppStrings.SETTINGS_INPUT_COMMENT_SPEED) SettingsRepository.COMMENT_SPEED else if (t == AppStrings.SETTINGS_INPUT_COMMENT_SIZE) SettingsRepository.COMMENT_FONT_SIZE else if (t == AppStrings.SETTINGS_INPUT_COMMENT_OPACITY) SettingsRepository.COMMENT_OPACITY else SettingsRepository.COMMENT_MAX_LINES,
@@ -1120,8 +1126,28 @@ fun SettingsScreen(
                 initialValue = state.initialValue,
                 isLongToken = state.isLongToken,
                 placeholder = state.placeholder,
+                keyboardType = state.keyboardType,
                 onDismiss = { closeDialog() },
                 onConfirm = { state.onConfirm(it); closeDialog() })
+
+            is SettingDialogState.Konomi -> KonomiConnectionDialog(
+                initial = state.connection,
+                onDismiss = { closeDialog() },
+                onConfirm = { connection ->
+                    // ポートだけの編集では、保存済みの手動接続先をそのまま使う。
+                    val keepSavedHost = connection.manual && state.connection.manual &&
+                        connection.host.trim() == state.connection.host.trim()
+                    val host = if (keepSavedHost) state.connection.host else connection.storageHost()
+                    scope.launch {
+                        try {
+                            viewModel.updateKonomiConnection(host, connection.port.trim())
+                        } catch (_: IOException) {
+                            toastMessage = "KonomiTV の接続先を保存できませんでした。"
+                        }
+                    }
+                    closeDialog()
+                }
+            )
 
             is SettingDialogState.BatchInput -> BatchInputDialog(
                 { closeDialog() },
