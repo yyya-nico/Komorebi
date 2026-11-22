@@ -223,17 +223,8 @@ class LivePlayerViewModel @Inject constructor(
         startSignalPolling()
     }
 
-    suspend fun getInitialEdcbDirect(): Boolean {
-        val backendStr = settingsRepository.backendType.first()
-        val prefStr = settingsRepository.preferredStreamSource.first()
-        if (backendStr == "EDCB") {
-            if (prefStr == "EDCB") return true
-            if (prefStr == "KONOMITV") return false
-        } else if (backendStr == "KONOMITV" || backendStr == "MIRAKURUN_ONLY") {
-            if (prefStr == "EDCB") return true
-        }
-        return false
-    }
+    suspend fun getInitialEdcbDirect(): Boolean =
+        settingsRepository.preferredStreamSource.first() == "EDCB"
 
     fun fetchAvailableQualities(source: StreamSource, isEdcbDirect: Boolean) {
         // 前回の取得(別ソース向け)が後から完了して一覧を上書きしないよう、先に取り消す

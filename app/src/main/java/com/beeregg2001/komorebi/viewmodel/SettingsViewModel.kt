@@ -745,42 +745,13 @@ class SettingsViewModel @Inject constructor(
 
     fun saveSmbServer(server: SmbServer) {
         viewModelScope.launch(Dispatchers.IO) {
-            val json = settingsRepository.smbServerList.first()
-            val currentList = try {
-                val type = object : TypeToken<List<SmbServer>>() {}.type
-                gson.fromJson<List<SmbServer>>(json, type) ?: emptyList()
-            } catch (e: Exception) {
-                emptyList()
-            }.toMutableList()
-
-            val existingIndex = currentList.indexOfFirst { it.id == server.id }
-            if (existingIndex != -1) {
-                currentList[existingIndex] = server
-            } else {
-                currentList.add(server)
-            }
-            settingsRepository.saveString(
-                SettingsRepository.SMB_SERVER_LIST,
-                gson.toJson(currentList)
-            )
+            settingsRepository.saveSmbServer(server)
         }
     }
 
     fun deleteSmbServer(serverId: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            val json = settingsRepository.smbServerList.first()
-            val currentList = try {
-                val type = object : TypeToken<List<SmbServer>>() {}.type
-                gson.fromJson<List<SmbServer>>(json, type) ?: emptyList()
-            } catch (e: Exception) {
-                emptyList()
-            }
-
-            val newList = currentList.filter { it.id != serverId }
-            settingsRepository.saveString(
-                SettingsRepository.SMB_SERVER_LIST,
-                gson.toJson(newList)
-            )
+            settingsRepository.deleteSmbServer(serverId)
         }
     }
 

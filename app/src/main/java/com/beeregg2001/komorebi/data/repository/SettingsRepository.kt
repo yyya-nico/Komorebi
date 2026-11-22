@@ -5,8 +5,15 @@ import android.util.Log
 import com.beeregg2001.komorebi.common.UrlBuilder
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.beeregg2001.komorebi.data.model.StreamSource
+import com.beeregg2001.komorebi.viewmodel.SmbServer
+import com.google.gson.Gson
+import com.google.gson.JsonParseException
+import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -22,6 +29,9 @@ class SettingsRepository @Inject constructor(
 ) {
 
     companion object {
+        private val smbGson by lazy { Gson() }
+        private val SETUP_COMPLETED = booleanPreferencesKey("setup_completed")
+        internal const val KONOMI_PLACEHOLDER_HOST = "https://192-168-xxx-xxx.local.konomi.tv"
         val BACKEND_TYPE = stringPreferencesKey("backend_type")
         val EDCB_IP = stringPreferencesKey("edcb_ip")
         val EDCB_PORT = stringPreferencesKey("edcb_port")
@@ -117,21 +127,24 @@ class SettingsRepository @Inject constructor(
         }
     }
 
-    val isInitialized: Flow<Boolean> = context.dataStore.data
-        .map { preferences ->
-            val backend = preferences[BACKEND_TYPE] ?: "KONOMITV"
-            when (backend) {
-                "KONOMITV" -> {
-                    val ip = preferences[KONOMI_IP]
-                    !ip.isNullOrBlank() && ip != "https://192-168-xxx-xxx.local.konomi.tv"
-                }
-
-                "EDCB" -> !preferences[EDCB_IP].isNullOrBlank()
-                "EPGSTATION" -> !preferences[EPGSTATION_IP].isNullOrBlank()
-                "MIRAKURUN_ONLY" -> !preferences[MIRAKURUN_IP].isNullOrBlank()
-                else -> false
+    private fun hasMainConnection(preferences: Preferences): Boolean =
+        when (preferences[BACKEND_TYPE] ?: "KONOMITV") {
+            "KONOMITV" -> {
+                val ip = preferences[KONOMI_IP]
+                !ip.isNullOrBlank() && ip != KONOMI_PLACEHOLDER_HOST
             }
+            "EDCB" -> !preferences[EDCB_IP].isNullOrBlank()
+            "EPGSTATION" -> !preferences[EPGSTATION_IP].isNullOrBlank()
+            "MIRAKURUN_ONLY" -> !preferences[MIRAKURUN_IP].isNullOrBlank()
+            else -> false
         }
+
+    val isInitialized: Flow<Boolean> = context.dataStore.data.map(::hasMainConnection)
+
+    internal suspend fun needsInitialSetup(): Boolean {
+        val preferences = context.dataStore.data.first()
+        return preferences[SETUP_COMPLETED] != true && !hasMainConnection(preferences)
+    }
 
     val backendType: Flow<String> = context.dataStore.data.map { it[BACKEND_TYPE] ?: "KONOMITV" }
     val edcbIp: Flow<String> = context.dataStore.data.map { it[EDCB_IP] ?: "" }
@@ -142,7 +155,7 @@ class SettingsRepository @Inject constructor(
     val epgStationIp: Flow<String> = context.dataStore.data.map { it[EPGSTATION_IP] ?: "" }
     val epgStationPort: Flow<String> = context.dataStore.data.map { it[EPGSTATION_PORT] ?: "8888" }
     val konomiIp: Flow<String> =
-        context.dataStore.data.map { it[KONOMI_IP] ?: "https://192-168-xxx-xxx.local.konomi.tv" }
+        context.dataStore.data.map { it[KONOMI_IP] ?: KONOMI_PLACEHOLDER_HOST }
     val konomiPort: Flow<String> = context.dataStore.data.map { it[KONOMI_PORT] ?: "7000" }
     val mirakurunIp: Flow<String> = context.dataStore.data.map { it[MIRAKURUN_IP] ?: "" }
     val mirakurunPort: Flow<String> = context.dataStore.data.map { it[MIRAKURUN_PORT] ?: "40772" }
@@ -227,11 +240,72 @@ class SettingsRepository @Inject constructor(
         // ★ 最適化に伴う整合性維持: 接続先が変わると局ロゴ URL も変わるため、
         //   共有 URL キャッシュを破棄して古い URL を返さないようにする。
         if (key in LOGO_URL_AFFECTING_KEYS) {
-            ChannelLogoUrlCache.clear()
             // ★ 追加: 接続先が変われば KonomiTV の Original画質(ライブ)対応状況も
             //   変わりうるため、旧接続先で確認した「非対応」判定を持ち越さない
-            KonomiOriginalQualityGate.reset()
+            resetConnectionCaches()
         }
+    }
+
+    internal suspend fun completeInitialSetup(
+        main: SetupConnection,
+        preferredSource: StreamSource,
+        alternate: SetupConnection?,
+        smbServer: SmbServer?,
+        accessHeaders: Map<String, String>
+    ) {
+        context.dataStore.edit { settings ->
+            settings[BACKEND_TYPE] = main.source.name
+            settings[PREFERRED_STREAM_SOURCE] = preferredSource.name
+            settings.setConnection(main)
+            alternate?.let { settings.setConnection(it) }
+            smbServer?.let { settings.upsertSmbServer(it) }
+            accessHeaders[CF_ACCESS_CLIENT_ID_HEADER]?.let { settings[CF_ACCESS_CLIENT_ID] = it }
+            accessHeaders[CF_ACCESS_CLIENT_SECRET_HEADER]?.let { settings[CF_ACCESS_CLIENT_SECRET] = it }
+            settings[SETUP_COMPLETED] = true
+        }
+        resetConnectionCaches()
+    }
+
+    suspend fun saveSmbServer(server: SmbServer) {
+        context.dataStore.edit { it.upsertSmbServer(server) }
+    }
+
+    suspend fun deleteSmbServer(serverId: String) {
+        context.dataStore.edit { settings ->
+            val servers = readSmbServers(settings).filter { it.id != serverId }
+            settings[SMB_SERVER_LIST] = smbGson.toJson(servers)
+        }
+    }
+
+    private fun MutablePreferences.upsertSmbServer(server: SmbServer) {
+        val updated = readSmbServers(this).toMutableList()
+        val index = updated.indexOfFirst { it.id == server.id }
+        if (index >= 0) updated[index] = server else updated.add(server)
+        this[SMB_SERVER_LIST] = smbGson.toJson(updated)
+    }
+
+    private fun readSmbServers(preferences: Preferences): List<SmbServer> = try {
+        val type = object : TypeToken<List<SmbServer>>() {}.type
+        smbGson.fromJson<List<SmbServer>>(preferences[SMB_SERVER_LIST], type).orEmpty()
+    } catch (_: JsonParseException) {
+        emptyList()
+    }
+
+    private fun MutablePreferences.setConnection(connection: SetupConnection) {
+        val (hostKey, portKey) = when (connection.source) {
+            StreamSource.KONOMITV -> KONOMI_IP to KONOMI_PORT
+            StreamSource.EDCB -> EDCB_IP to EDCB_PORT
+            StreamSource.EPGSTATION -> EPGSTATION_IP to EPGSTATION_PORT
+            StreamSource.MIRAKURUN -> MIRAKURUN_IP to MIRAKURUN_PORT
+        }
+        this[hostKey] = connection.host
+        this[portKey] = connection.port
+        connection.httpPort?.let { this[EDCB_HTTP_PORT] = it }
+    }
+
+    private fun resetConnectionCaches() {
+        ChannelLogoUrlCache.clear()
+        KonomiOriginalQualityGate.reset()
     }
 
     suspend fun saveBoolean(

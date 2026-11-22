@@ -9,11 +9,16 @@ import androidx.compose.runtime.*
 import androidx.media3.common.util.UnstableApi
 import com.beeregg2001.komorebi.ui.theme.KomorebiTheme
 import com.beeregg2001.komorebi.ui.components.ExitDialog
+import com.beeregg2001.komorebi.ui.home.LoadingScreen
 import com.beeregg2001.komorebi.ui.main.MainRootScreen
+import com.beeregg2001.komorebi.ui.setting.SetupReadErrorScreen
+import com.beeregg2001.komorebi.ui.setting.SetupWizardScreen
 import com.beeregg2001.komorebi.viewmodel.ChannelViewModel
 import com.beeregg2001.komorebi.viewmodel.EpgViewModel
 import com.beeregg2001.komorebi.viewmodel.HomeViewModel
 import com.beeregg2001.komorebi.viewmodel.RecordViewModel
+import com.beeregg2001.komorebi.viewmodel.SetupRoute
+import com.beeregg2001.komorebi.viewmodel.SetupViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -25,6 +30,7 @@ class MainActivity : ComponentActivity() {
     private val epgViewModel: EpgViewModel by viewModels()
     private val homeViewModel: HomeViewModel by viewModels()
     private val recordViewModel: RecordViewModel by viewModels()
+    private val setupViewModel: SetupViewModel by viewModels()
 
 
     @UnstableApi
@@ -40,14 +46,18 @@ class MainActivity : ComponentActivity() {
             KomorebiTheme {
                 var showExitDialog by remember { mutableStateOf(false) }
 
-                // アプリのメインナビゲーション
-                MainRootScreen(
-                    channelViewModel = channelViewModel,
-                    epgViewModel = epgViewModel,
-                    homeViewModel = homeViewModel,
-                    recordViewModel = recordViewModel,
-                    onExitApp = { showExitDialog = true }
-                )
+                when (setupViewModel.route) {
+                    SetupRoute.LOADING -> LoadingScreen("設定を読み込み中…")
+                    SetupRoute.READ_ERROR -> SetupReadErrorScreen(onRetry = setupViewModel::load)
+                    SetupRoute.WIZARD -> SetupWizardScreen(setupViewModel, onExit = { showExitDialog = true })
+                    SetupRoute.HOME -> MainRootScreen(
+                        channelViewModel = channelViewModel,
+                        epgViewModel = epgViewModel,
+                        homeViewModel = homeViewModel,
+                        recordViewModel = recordViewModel,
+                        onExitApp = { showExitDialog = true }
+                    )
+                }
 
                 if (showExitDialog) {
                     ExitDialog(

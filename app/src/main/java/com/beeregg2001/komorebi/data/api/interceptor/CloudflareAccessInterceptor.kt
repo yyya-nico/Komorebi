@@ -1,6 +1,7 @@
 package com.beeregg2001.komorebi.data.api.interceptor
 
 import android.util.Log
+import com.beeregg2001.komorebi.common.UrlBuilder
 import com.beeregg2001.komorebi.data.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -77,36 +78,11 @@ class CloudflareAccessInterceptor @Inject constructor(
         val (mirakurunIp, mirakurunPort) = values[2] to values[3]
         val (epgStationIp, epgStationPort) = values[4] to values[5]
 
-        val konomiBaseUrl = if (konomiIp.startsWith("http://") || konomiIp.startsWith("https://")) {
-            "$konomiIp:$konomiPort"
-        } else {
-            "http://$konomiIp:$konomiPort"
-        }
-
-        val mirakurunBaseUrl = if (mirakurunIp.isBlank()) {
-            null
-        } else if (mirakurunIp.startsWith("http://") || mirakurunIp.startsWith("https://")) {
-            "$mirakurunIp:$mirakurunPort"
-        } else {
-            "http://$mirakurunIp:$mirakurunPort"
-        }
-
-        val epgStationBaseUrl = if (epgStationIp.isBlank()) {
-            null
-        } else {
-            com.beeregg2001.komorebi.common.UrlBuilder.formatBaseUrl(
-                epgStationIp,
-                epgStationPort,
-                "http"
-            )
-        }
-
-        return listOfNotNull(
-            konomiBaseUrl.toHttpUrlOrNull()?.host,
-            mirakurunBaseUrl?.toHttpUrlOrNull()?.host,
-            // ★ 追加: EPGStation も Cloudflare Access 配下に置かれることがあるため対象に含める
-            epgStationBaseUrl?.takeIf { it.isNotBlank() }?.toHttpUrlOrNull()?.host
-        )
+        return listOf(konomiIp to konomiPort, mirakurunIp to mirakurunPort, epgStationIp to epgStationPort)
+            .mapNotNull { (host, port) ->
+                if (host.isBlank()) null
+                else UrlBuilder.formatBaseUrl(host, port, "http").toHttpUrlOrNull()?.host
+            }
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
