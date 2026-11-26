@@ -15,14 +15,16 @@ import java.io.IOException
 import javax.inject.Inject
 import kotlinx.coroutines.launch
 
-internal enum class SetupPage(val title: String) {
-    WELCOME("Komorebiへようこそ"),
-    SYSTEM("どのシステムをメインにしますか？"),
-    MAIN_CONNECTION("接続先を入力してください"),
-    SOURCE("どのソースを優先しますか？"),
-    SOURCE_CONNECTION("接続先を入力してください"),
-    FILE_LIBRARY("ファイルライブラリを追加"),
-    CLOUDFLARE("Cloudflare Zero Trust")
+internal enum class SetupPage(val step: Int, val title: String, val isChoice: Boolean = false) {
+    WELCOME(1, "Komorebiへようこそ"),
+    SYSTEM(2, "どのシステムをメインにしますか？", isChoice = true),
+    MAIN_CONNECTION(3, "接続先を入力してください"),
+    SOURCE(4, "どのソースを優先しますか？", isChoice = true),
+    SOURCE_CONNECTION(5, "接続先を入力してください"),
+    FILE_LIBRARY_CHOICE(6, "ファイルライブラリを利用しますか？", isChoice = true),
+    FILE_LIBRARY(6, "ファイルライブラリを追加"),
+    CLOUDFLARE_CHOICE(7, "Cloudflare Access を利用しますか？", isChoice = true),
+    CLOUDFLARE(7, "Cloudflare Zero Trust")
 }
 
 internal enum class SetupRoute { LOADING, WIZARD, HOME, READ_ERROR }
@@ -35,8 +37,14 @@ internal class SetupViewModel @Inject constructor(
         private set
     var page by mutableStateOf(SetupPage.WELCOME)
         private set
-    var mainSystem by mutableStateOf(StreamSource.KONOMITV)
-    var preferredSource by mutableStateOf(StreamSource.KONOMITV)
+    var mainSystem by mutableStateOf<StreamSource?>(null)
+        private set
+    var preferredSource by mutableStateOf<StreamSource?>(null)
+        private set
+    var useFileLibrary by mutableStateOf<Boolean?>(null)
+        private set
+    var useCloudflare by mutableStateOf<Boolean?>(null)
+        private set
     var smb by mutableStateOf(SmbServer(name = "", ip = "", port = "445", user = "", password = ""))
     var smbManualAddress by mutableStateOf(false)
         private set
@@ -47,7 +55,6 @@ internal class SetupViewModel @Inject constructor(
     var error by mutableStateOf<String?>(null)
         private set
 
-    private var addSmb = false
     private val editedConnectionHosts = mutableSetOf<StreamSource>()
     private var smbHostEdited = false
     private val connections = mutableStateMapOf(
@@ -57,8 +64,11 @@ internal class SetupViewModel @Inject constructor(
         StreamSource.MIRAKURUN to SetupConnection(StreamSource.MIRAKURUN)
     )
 
+    val mainConnection: SetupConnection
+        get() = connection(checkNotNull(mainSystem))
+
     val alternateSource: StreamSource?
-        get() = preferredSource.takeUnless { it == StreamSource.KONOMITV || it == mainSystem }
+        get() = preferredSource?.takeUnless { it == StreamSource.KONOMITV || it == mainSystem }
 
     init {
         load()
@@ -76,6 +86,31 @@ internal class SetupViewModel @Inject constructor(
     }
 
     fun connection(source: StreamSource): SetupConnection = connections.getValue(source)
+
+    fun selectMainSystem(source: StreamSource) {
+        if (page != SetupPage.SYSTEM) return
+        mainSystem = source
+        advance()
+    }
+
+    fun selectPreferredSource(source: StreamSource) {
+        if (page != SetupPage.SOURCE) return
+        preferredSource = source
+        advance()
+    }
+
+    fun selectFileLibrary(use: Boolean) {
+        if (page != SetupPage.FILE_LIBRARY_CHOICE) return
+        useFileLibrary = use
+        if (use) advance() else page = SetupPage.CLOUDFLARE_CHOICE
+    }
+
+    fun selectCloudflare(use: Boolean) {
+        if (isSaving || page != SetupPage.CLOUDFLARE_CHOICE) return
+        useCloudflare = use
+        error = null
+        if (use) advance() else finish(skipCloudflare = true)
+    }
 
     fun updateConnection(connection: SetupConnection) {
         val previous = connections.getValue(connection.source)
@@ -96,38 +131,45 @@ internal class SetupViewModel @Inject constructor(
     fun back() {
         if (isSaving || page == SetupPage.WELCOME) return
         error = null
-        page = SetupPage.entries[page.ordinal - 1]
+        page = when (page) {
+            SetupPage.CLOUDFLARE_CHOICE ->
+                if (useFileLibrary == true) SetupPage.FILE_LIBRARY else SetupPage.FILE_LIBRARY_CHOICE
+            else -> SetupPage.entries[page.ordinal - 1]
+        }
     }
 
-    fun next(skip: Boolean = false) {
-        if (isSaving) return
+    fun next() {
+        if (isSaving || page.isChoice) return
         val message = when (page) {
-            SetupPage.MAIN_CONNECTION -> connection(mainSystem).validationError()
+            SetupPage.MAIN_CONNECTION -> mainConnection.validationError()
             SetupPage.SOURCE_CONNECTION -> alternateSource?.let {
                 connection(it).copy(httpPort = null).validationError()
             }
-            SetupPage.FILE_LIBRARY -> if (skip) null else smbError()
+            SetupPage.FILE_LIBRARY -> smbError()
             else -> null
         }
         error = message
         if (message != null) return
 
         if (page == SetupPage.CLOUDFLARE) {
-            finish(skip)
+            finish(skipCloudflare = false)
         } else {
-            if (page == SetupPage.FILE_LIBRARY) addSmb = !skip
-            val nextPage = SetupPage.entries[page.ordinal + 1]
-            prefillAddress(nextPage)
-            page = nextPage
+            advance()
         }
     }
 
+    private fun advance() {
+        val nextPage = SetupPage.entries[page.ordinal + 1]
+        prefillAddress(nextPage)
+        page = nextPage
+    }
+
     private fun prefillAddress(page: SetupPage) {
-        val main = connection(mainSystem)
         when (page) {
             SetupPage.SOURCE_CONNECTION -> {
                 val source = alternateSource ?: return
                 if (source !in editedConnectionHosts) {
+                    val main = mainConnection
                     connections[source] = connection(source).copy(
                         host = main.host.trim(),
                         manualAddress = main.manualAddress
@@ -135,7 +177,7 @@ internal class SetupViewModel @Inject constructor(
                 }
             }
             SetupPage.FILE_LIBRARY -> if (!smbHostEdited) {
-                val previous = alternateSource?.let(::connection) ?: main
+                val previous = alternateSource?.let(::connection) ?: mainConnection
                 val host = ConnectionAddress.hostForSmb(previous.host)
                 smb = smb.copy(ip = host)
                 smbManualAddress = ConnectionAddress.usesHostName(host)
@@ -152,10 +194,10 @@ internal class SetupViewModel @Inject constructor(
             } else null
     }
 
-    private fun finish(skip: Boolean) {
-        val accessHeaders = if (skip) emptyMap() else
+    private fun finish(skipCloudflare: Boolean) {
+        val accessHeaders = if (skipCloudflare) emptyMap() else
             SettingsRepository.buildCfAccessHeaders(clientId, clientSecret)
-        if (!skip && accessHeaders.isEmpty()) {
+        if (!skipCloudflare && accessHeaders.isEmpty()) {
             error = "Client ID と Client Secret の両方を入力してください。"
             return
         }
@@ -164,15 +206,15 @@ internal class SetupViewModel @Inject constructor(
             return
         }
 
-        val smbServer = smb.takeIf { addSmb }?.let {
+        val smbServer = smb.takeIf { useFileLibrary == true }?.let {
             it.copy(name = it.name.trim(), ip = it.ip.trim(), port = it.port.trim().ifEmpty { "445" })
         }
         isSaving = true
         viewModelScope.launch {
             try {
                 repository.completeInitialSetup(
-                    main = connection(mainSystem).normalized(),
-                    preferredSource = preferredSource,
+                    main = mainConnection.normalized(),
+                    preferredSource = checkNotNull(preferredSource),
                     alternate = alternateSource?.let { connection(it).copy(httpPort = null).normalized() },
                     smbServer = smbServer,
                     accessHeaders = accessHeaders

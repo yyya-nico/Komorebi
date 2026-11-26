@@ -40,12 +40,10 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
     val page = viewModel.page
     val colors = KomorebiTheme.colors
     val connection = when (page) {
-        SetupPage.MAIN_CONNECTION -> viewModel.connection(viewModel.mainSystem)
+        SetupPage.MAIN_CONNECTION -> viewModel.mainConnection
         SetupPage.SOURCE_CONNECTION -> viewModel.alternateSource?.let(viewModel::connection)
         else -> null
     }
-    val skipCloudflare = page == SetupPage.CLOUDFLARE &&
-        viewModel.clientId.isBlank() && viewModel.clientSecret.isBlank()
     BackHandler {
         if (page == SetupPage.WELCOME) onExit() else viewModel.back()
     }
@@ -71,7 +69,7 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    "${page.ordinal + 1} / ${SetupPage.entries.size}",
+                    "${page.step} / ${SetupPage.entries.last().step}",
                     style = MaterialTheme.typography.labelLarge,
                     color = colors.textSecondary
                 )
@@ -101,7 +99,7 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                             ),
                             selected = viewModel.mainSystem,
                             initialFocus = initialFocus,
-                            onSelect = { viewModel.mainSystem = it }
+                            onSelect = viewModel::selectMainSystem
                         )
                         SetupPage.MAIN_CONNECTION, SetupPage.SOURCE_CONNECTION -> {
                             if (connection == null) {
@@ -127,10 +125,17 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                             ),
                             selected = viewModel.preferredSource,
                             initialFocus = initialFocus,
-                            onSelect = { viewModel.preferredSource = it }
+                            onSelect = viewModel::selectPreferredSource
                         )
-                        SetupPage.FILE_LIBRARY -> {
+                        SetupPage.FILE_LIBRARY_CHOICE -> {
                             SetupInstructions("NASなどのSMBサーバーにある動画をファイルライブラリに追加できます。")
+                            SetupUsageChoices(
+                                selected = viewModel.useFileLibrary,
+                                initialFocus = initialFocus,
+                                onSelect = viewModel::selectFileLibrary
+                            )
+                        }
+                        SetupPage.FILE_LIBRARY -> {
                             val smb = viewModel.smb
                             SetupField("表示名", smb.name, { viewModel.smb = smb.copy(name = it) },
                                 placeholder = "リビングのNAS", focusRequester = initialFocus)
@@ -146,8 +151,18 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                             SetupField("パスワード", smb.password, { viewModel.smb = smb.copy(password = it) },
                                 isPassword = true)
                         }
+                        SetupPage.CLOUDFLARE_CHOICE -> {
+                            SetupInstructions("Cloudflare Access で保護されたサーバーに接続する場合に利用します。")
+                            SetupUsageChoices(
+                                selected = viewModel.useCloudflare,
+                                initialFocus = initialFocus,
+                                enabled = !viewModel.isSaving,
+                                onSelect = viewModel::selectCloudflare
+                            )
+                            if (viewModel.isSaving) SetupInstructions("保存中…")
+                        }
                         SetupPage.CLOUDFLARE -> {
-                            SetupInstructions("Cloudflare Access を利用する場合は、サービストークンを入力してください。")
+                            SetupInstructions("Cloudflare Access のサービストークンを入力してください。")
                             SetupField("Client ID", viewModel.clientId, { viewModel.clientId = it },
                                 placeholder = AppStrings.SETTINGS_PLACEHOLDER_CF_CLIENT_ID,
                                 focusRequester = initialFocus)
@@ -171,23 +186,19 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                         OutlinedButton(onClick = viewModel::back, enabled = !viewModel.isSaving) { Text("戻る") }
                     }
                     Spacer(Modifier.weight(1f))
-                    if (page == SetupPage.FILE_LIBRARY) {
-                        OutlinedButton(onClick = { viewModel.next(skip = true) }, enabled = !viewModel.isSaving) {
-                            Text("スキップ")
+                    if (!page.isChoice) {
+                        Button(
+                            onClick = viewModel::next,
+                            modifier = if (focusNext) Modifier.focusRequester(initialFocus) else Modifier,
+                            enabled = !viewModel.isSaving
+                        ) {
+                            Text(when {
+                                viewModel.isSaving -> "保存中…"
+                                page == SetupPage.WELCOME -> "セットアップを始める"
+                                page == SetupPage.CLOUDFLARE -> "設定を完了"
+                                else -> "次へ"
+                            })
                         }
-                    }
-                    Button(
-                        onClick = { viewModel.next(skip = skipCloudflare) },
-                        modifier = if (focusNext) Modifier.focusRequester(initialFocus) else Modifier,
-                        enabled = !viewModel.isSaving
-                    ) {
-                        Text(when {
-                            viewModel.isSaving -> "保存中…"
-                            page == SetupPage.WELCOME -> "セットアップを始める"
-                            skipCloudflare -> "スキップして完了"
-                            page == SetupPage.CLOUDFLARE -> "設定を完了"
-                            else -> "次へ"
-                        })
                     }
                 }
             }
@@ -208,18 +219,37 @@ internal fun SetupReadErrorScreen(onRetry: () -> Unit) {
 }
 
 @Composable
-private fun SetupChoices(
-    options: List<Pair<StreamSource, String>>,
-    selected: StreamSource,
+private fun SetupUsageChoices(
+    selected: Boolean?,
     initialFocus: FocusRequester,
-    onSelect: (StreamSource) -> Unit
+    enabled: Boolean = true,
+    onSelect: (Boolean) -> Unit
 ) {
-    options.forEach { (source, label) ->
+    SetupChoices(
+        options = listOf(true to "利用する", false to "利用しない"),
+        selected = selected,
+        initialFocus = initialFocus,
+        enabled = enabled,
+        onSelect = onSelect
+    )
+}
+
+@Composable
+private fun <T : Any> SetupChoices(
+    options: List<Pair<T, String>>,
+    selected: T?,
+    initialFocus: FocusRequester,
+    enabled: Boolean = true,
+    onSelect: (T) -> Unit
+) {
+    val focusedOption = selected ?: options.first().first
+    options.forEach { (option, label) ->
         SelectionDialogItem(
             label = label,
-            isSelected = selected == source,
-            onClick = { onSelect(source) },
-            modifier = if (selected == source) Modifier.focusRequester(initialFocus) else Modifier
+            isSelected = selected == option,
+            onClick = { onSelect(option) },
+            modifier = if (focusedOption == option) Modifier.focusRequester(initialFocus) else Modifier,
+            enabled = enabled
         )
     }
 }

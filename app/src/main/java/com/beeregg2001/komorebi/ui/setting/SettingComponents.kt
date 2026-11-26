@@ -945,7 +945,8 @@ fun SelectionDialogItem(
     label: String,
     isSelected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val colors = KomorebiTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
@@ -955,6 +956,7 @@ fun SelectionDialogItem(
 
     Surface(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier.fillMaxWidth(),
         interactionSource = interactionSource,
         colors = ClickableSurfaceDefaults.colors(
