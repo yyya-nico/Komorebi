@@ -133,6 +133,7 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                                 options = listOf(true to "SMB の設定をする", false to "スキップ"),
                                 selected = viewModel.useFileLibrary,
                                 initialFocus = initialFocus,
+                                initialOption = false,
                                 onSelect = viewModel::selectFileLibrary
                             )
                         }
@@ -161,6 +162,7 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                                 ),
                                 selected = viewModel.useCloudflare,
                                 initialFocus = initialFocus,
+                                initialOption = false,
                                 enabled = !viewModel.isSaving,
                                 onSelect = viewModel::selectCloudflare
                             )
@@ -228,16 +230,16 @@ private fun <T : Any> SetupChoices(
     options: List<Pair<T, String>>,
     selected: T?,
     initialFocus: FocusRequester,
+    initialOption: T = selected ?: options.first().first,
     enabled: Boolean = true,
     onSelect: (T) -> Unit
 ) {
-    val focusedOption = selected ?: options.first().first
     options.forEach { (option, label) ->
         SelectionDialogItem(
             label = label,
             isSelected = selected == option,
             onClick = { onSelect(option) },
-            modifier = if (focusedOption == option) Modifier.focusRequester(initialFocus) else Modifier,
+            modifier = if (initialOption == option) Modifier.focusRequester(initialFocus) else Modifier,
             enabled = enabled
         )
     }
