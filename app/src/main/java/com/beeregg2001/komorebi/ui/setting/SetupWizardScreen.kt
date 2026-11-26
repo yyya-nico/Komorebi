@@ -129,7 +129,8 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                         )
                         SetupPage.FILE_LIBRARY_CHOICE -> {
                             SetupInstructions("NASなどのSMBサーバーにある動画をファイルライブラリに追加できます。")
-                            SetupUsageChoices(
+                            SetupChoices(
+                                options = listOf(true to "SMB の設定をする", false to "スキップ"),
                                 selected = viewModel.useFileLibrary,
                                 initialFocus = initialFocus,
                                 onSelect = viewModel::selectFileLibrary
@@ -153,7 +154,11 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                         }
                         SetupPage.CLOUDFLARE_CHOICE -> {
                             SetupInstructions("Cloudflare Access で保護されたサーバーに接続する場合に利用します。")
-                            SetupUsageChoices(
+                            SetupChoices(
+                                options = listOf(
+                                    true to "Cloudflare Access の設定をする",
+                                    false to "スキップして完了"
+                                ),
                                 selected = viewModel.useCloudflare,
                                 initialFocus = initialFocus,
                                 enabled = !viewModel.isSaving,
@@ -216,22 +221,6 @@ internal fun SetupReadErrorScreen(onRetry: () -> Unit) {
             Button(onClick = onRetry, modifier = Modifier.focusRequester(focusRequester)) { Text("再試行") }
         }
     }
-}
-
-@Composable
-private fun SetupUsageChoices(
-    selected: Boolean?,
-    initialFocus: FocusRequester,
-    enabled: Boolean = true,
-    onSelect: (Boolean) -> Unit
-) {
-    SetupChoices(
-        options = listOf(true to "利用する", false to "利用しない"),
-        selected = selected,
-        initialFocus = initialFocus,
-        enabled = enabled,
-        onSelect = onSelect
-    )
 }
 
 @Composable
