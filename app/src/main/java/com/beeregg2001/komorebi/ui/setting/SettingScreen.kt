@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import com.beeregg2001.komorebi.common.safeRequestFocus
+import com.beeregg2001.komorebi.common.safeRequestFocusWithRetry
 import com.beeregg2001.komorebi.common.AppStrings
 import com.beeregg2001.komorebi.data.SetupConnection
 import com.beeregg2001.komorebi.data.model.StreamSource
@@ -37,6 +38,7 @@ import com.beeregg2001.komorebi.ui.components.GlobalToast
 import com.beeregg2001.komorebi.ui.theme.KomorebiTheme
 import com.beeregg2001.komorebi.ui.theme.getSeasonalBackgroundBrush
 import com.beeregg2001.komorebi.viewmodel.SettingsViewModel
+import com.beeregg2001.komorebi.viewmodel.SetupViewModel
 import com.beeregg2001.komorebi.viewmodel.ChannelViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -71,6 +73,10 @@ fun SettingsScreen(
 
     val prefs = rememberSettingPreferences(repository)
     val uiState = rememberSettingUiState(initialCategoryIndex)
+    val setupViewModel: SetupViewModel = hiltViewModel()
+    val setupWizardRequester = remember { FocusRequester() }
+    var showSetupWizard by remember { mutableStateOf(false) }
+    var restoreSetupFocus by remember { mutableStateOf(false) }
 
     val totalRecordCount by viewModel.totalRecordCount.collectAsState()
     val lastSyncedAt by viewModel.lastSyncedAt.collectAsState()
@@ -202,7 +208,13 @@ fun SettingsScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(showSetupWizard) {
+        if (showSetupWizard) return@LaunchedEffect
+        if (restoreSetupFocus) {
+            setupWizardRequester.safeRequestFocusWithRetry("Settings_SetupWizard")
+            restoreSetupFocus = false
+            return@LaunchedEffect
+        }
         delay(400)
 
         if (initialFocusItemIndex != null) {
@@ -229,6 +241,18 @@ fun SettingsScreen(
             categoryFocusRequesters.getOrNull(uiState.selectedCategoryIndex)
                 ?.safeRequestFocus("Settings_Initial")
         }
+    }
+
+    if (showSetupWizard) {
+        SetupWizardScreen(
+            viewModel = setupViewModel,
+            onExit = {
+                setupViewModel.resetDraft()
+                showSetupWizard = false
+            },
+            onComplete = { showSetupWizard = false }
+        )
+        return
     }
 
     val closeDialog = {
@@ -548,7 +572,15 @@ fun SettingsScreen(
                             itemFocusRequesters[1][6],
                             itemFocusRequesters[1][8],
                             itemFocusRequesters[1][9],
-                            categoryFocusRequesters[1]
+                            categoryFocusRequesters[1],
+                            setupWizardRequester,
+                            onStartSetupWizard = {
+                                if (!setupViewModel.isSaving) {
+                                    setupViewModel.resetDraft()
+                                    restoreSetupFocus = true
+                                    showSetupWizard = true
+                                }
+                            }
                         ) { uiState.restoreFocusRequester = it; uiState.restoreCategoryIndex = 1 }
 
                         2 -> PlaybackSettingsContent(

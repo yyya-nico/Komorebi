@@ -286,6 +286,8 @@ fun ConnectionSettingsContent(
     cfIdR: FocusRequester,
     cfSecretR: FocusRequester,
     sidebarR: FocusRequester,
+    setupWizardR: FocusRequester,
+    onStartSetupWizard: () -> Unit,
     onClick: (FocusRequester) -> Unit
 ) {
     val colors = KomorebiTheme.colors
@@ -591,6 +593,7 @@ fun ConnectionSettingsContent(
                     .focusProperties {
                         left = sidebarR
                         up = cfIdR
+                        down = setupWizardR
                     },
                 onClick = {
                     onClick(cfSecretR); onEdit(
@@ -599,6 +602,20 @@ fun ConnectionSettingsContent(
                 )
                 })
         }
+
+        SettingItem(
+            title = "はじめての設定",
+            value = "",
+            icon = Icons.Default.RestartAlt,
+            modifier = Modifier
+                .focusRequester(setupWizardR)
+                .focusProperties {
+                    left = sidebarR
+                    up = cfSecretR
+                    down = FocusRequester.Cancel
+                },
+            onClick = onStartSetupWizard
+        )
     }
 }
 

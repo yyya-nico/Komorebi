@@ -43,7 +43,7 @@ internal class SetupViewModel @Inject constructor(
         private set
     var useFileLibrary by mutableStateOf<Boolean?>(null)
         private set
-    var smb by mutableStateOf(SmbServer(name = "", ip = "", port = "445", user = "", password = ""))
+    var smb by mutableStateOf(newSmbDraft())
     var smbManualAddress by mutableStateOf(false)
         private set
     var clientId by mutableStateOf("")
@@ -55,12 +55,7 @@ internal class SetupViewModel @Inject constructor(
 
     private val editedConnectionHosts = mutableSetOf<StreamSource>()
     private var smbHostEdited = false
-    private val connections = mutableStateMapOf(
-        StreamSource.KONOMITV to SetupConnection(StreamSource.KONOMITV),
-        StreamSource.EDCB to SetupConnection(StreamSource.EDCB, httpPort = "5510"),
-        StreamSource.EPGSTATION to SetupConnection(StreamSource.EPGSTATION),
-        StreamSource.MIRAKURUN to SetupConnection(StreamSource.MIRAKURUN)
-    )
+    private val connections = mutableStateMapOf(*newConnectionDrafts())
 
     val mainConnection: SetupConnection
         get() = connection(checkNotNull(mainSystem))
@@ -85,6 +80,30 @@ internal class SetupViewModel @Inject constructor(
 
     fun connection(source: StreamSource): SetupConnection = connections.getValue(source)
 
+    fun resetDraft() {
+        page = SetupPage.WELCOME
+        mainSystem = null
+        preferredSource = null
+        useFileLibrary = null
+        smb = newSmbDraft()
+        smbManualAddress = false
+        clientId = ""
+        clientSecret = ""
+        error = null
+        editedConnectionHosts.clear()
+        smbHostEdited = false
+        connections.putAll(newConnectionDrafts())
+    }
+
+    private fun newSmbDraft() = SmbServer(name = "", ip = "", port = "445", user = "", password = "")
+
+    private fun newConnectionDrafts() = arrayOf(
+        StreamSource.KONOMITV to SetupConnection(StreamSource.KONOMITV),
+        StreamSource.EDCB to SetupConnection(StreamSource.EDCB, httpPort = "5510"),
+        StreamSource.EPGSTATION to SetupConnection(StreamSource.EPGSTATION),
+        StreamSource.MIRAKURUN to SetupConnection(StreamSource.MIRAKURUN)
+    )
+
     fun selectMainSystem(source: StreamSource) {
         if (page != SetupPage.SYSTEM) return
         mainSystem = source
@@ -103,10 +122,10 @@ internal class SetupViewModel @Inject constructor(
         if (use) advance() else page = SetupPage.CLOUDFLARE_CHOICE
     }
 
-    fun selectCloudflare(use: Boolean) {
+    fun selectCloudflare(use: Boolean, onComplete: () -> Unit) {
         if (isSaving || page != SetupPage.CLOUDFLARE_CHOICE) return
         error = null
-        if (use) advance() else finish(skipCloudflare = true)
+        if (use) advance() else finish(skipCloudflare = true, onComplete = onComplete)
     }
 
     fun updateConnection(connection: SetupConnection) {
@@ -135,7 +154,7 @@ internal class SetupViewModel @Inject constructor(
         }
     }
 
-    fun next() {
+    fun next(onComplete: () -> Unit) {
         if (isSaving || page.isChoice) return
         val message = when (page) {
             SetupPage.MAIN_CONNECTION -> mainConnection.validationError()
@@ -149,7 +168,7 @@ internal class SetupViewModel @Inject constructor(
         if (message != null) return
 
         if (page == SetupPage.CLOUDFLARE) {
-            finish(skipCloudflare = false)
+            finish(skipCloudflare = false, onComplete = onComplete)
         } else {
             advance()
         }
@@ -191,7 +210,7 @@ internal class SetupViewModel @Inject constructor(
             } else null
     }
 
-    private fun finish(skipCloudflare: Boolean) {
+    private fun finish(skipCloudflare: Boolean, onComplete: () -> Unit) {
         val accessHeaders = if (skipCloudflare) emptyMap() else
             SettingsRepository.buildCfAccessHeaders(clientId, clientSecret)
         if (!skipCloudflare && accessHeaders.isEmpty()) {
@@ -220,6 +239,7 @@ internal class SetupViewModel @Inject constructor(
                 clientId = ""
                 clientSecret = ""
                 route = SetupRoute.HOME
+                onComplete()
             } catch (_: IOException) {
                 error = "設定を保存できませんでした。もう一度お試しください。"
             } finally {

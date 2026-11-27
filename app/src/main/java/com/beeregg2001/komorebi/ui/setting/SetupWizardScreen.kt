@@ -36,7 +36,11 @@ import com.beeregg2001.komorebi.viewmodel.SetupPage
 import com.beeregg2001.komorebi.viewmodel.SetupViewModel
 
 @Composable
-internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
+internal fun SetupWizardScreen(
+    viewModel: SetupViewModel,
+    onExit: () -> Unit,
+    onComplete: () -> Unit = {}
+) {
     val page = viewModel.page
     val colors = KomorebiTheme.colors
     val connection = when (page) {
@@ -188,11 +192,11 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                             configureLabel = "Cloudflare Access の設定をする",
                             initialFocus = initialFocus,
                             enabled = !viewModel.isSaving,
-                            onSelect = viewModel::selectCloudflare
+                            onSelect = { viewModel.selectCloudflare(it, onComplete) }
                         )
                         else -> if (!page.isChoice) {
                             Button(
-                                onClick = viewModel::next,
+                                onClick = { viewModel.next(onComplete) },
                                 modifier = if (focusNext) Modifier.focusRequester(initialFocus) else Modifier,
                                 enabled = !viewModel.isSaving
                             ) {
