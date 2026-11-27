@@ -129,13 +129,6 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                         )
                         SetupPage.FILE_LIBRARY_CHOICE -> {
                             SetupInstructions("NASなどのSMBサーバーにある動画をファイルライブラリに追加できます。")
-                            SetupChoices(
-                                options = listOf(true to "SMB の設定をする", false to "スキップ"),
-                                selected = viewModel.useFileLibrary,
-                                initialFocus = initialFocus,
-                                initialOption = false,
-                                onSelect = viewModel::selectFileLibrary
-                            )
                         }
                         SetupPage.FILE_LIBRARY -> {
                             val smb = viewModel.smb
@@ -155,17 +148,6 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                         }
                         SetupPage.CLOUDFLARE_CHOICE -> {
                             SetupInstructions("Cloudflare Access で保護されたサーバーに接続する場合に利用します。")
-                            SetupChoices(
-                                options = listOf(
-                                    true to "Cloudflare Access の設定をする",
-                                    false to "スキップして完了"
-                                ),
-                                selected = viewModel.useCloudflare,
-                                initialFocus = initialFocus,
-                                initialOption = false,
-                                enabled = !viewModel.isSaving,
-                                onSelect = viewModel::selectCloudflare
-                            )
                             if (viewModel.isSaving) SetupInstructions("保存中…")
                         }
                         SetupPage.CLOUDFLARE -> {
@@ -193,18 +175,34 @@ internal fun SetupWizardScreen(viewModel: SetupViewModel, onExit: () -> Unit) {
                         OutlinedButton(onClick = viewModel::back, enabled = !viewModel.isSaving) { Text("戻る") }
                     }
                     Spacer(Modifier.weight(1f))
-                    if (!page.isChoice) {
-                        Button(
-                            onClick = viewModel::next,
-                            modifier = if (focusNext) Modifier.focusRequester(initialFocus) else Modifier,
-                            enabled = !viewModel.isSaving
-                        ) {
-                            Text(when {
-                                viewModel.isSaving -> "保存中…"
-                                page == SetupPage.WELCOME -> "セットアップを始める"
-                                page == SetupPage.CLOUDFLARE -> "設定を完了"
-                                else -> "次へ"
-                            })
+                    when (page) {
+                        SetupPage.FILE_LIBRARY_CHOICE -> SetupOptionalActions(
+                            skipLabel = "スキップ",
+                            configureLabel = "SMB の設定をする",
+                            initialFocus = initialFocus,
+                            enabled = !viewModel.isSaving,
+                            onSelect = viewModel::selectFileLibrary
+                        )
+                        SetupPage.CLOUDFLARE_CHOICE -> SetupOptionalActions(
+                            skipLabel = "スキップして完了",
+                            configureLabel = "Cloudflare Access の設定をする",
+                            initialFocus = initialFocus,
+                            enabled = !viewModel.isSaving,
+                            onSelect = viewModel::selectCloudflare
+                        )
+                        else -> if (!page.isChoice) {
+                            Button(
+                                onClick = viewModel::next,
+                                modifier = if (focusNext) Modifier.focusRequester(initialFocus) else Modifier,
+                                enabled = !viewModel.isSaving
+                            ) {
+                                Text(when {
+                                    viewModel.isSaving -> "保存中…"
+                                    page == SetupPage.WELCOME -> "セットアップを始める"
+                                    page == SetupPage.CLOUDFLARE -> "設定を完了"
+                                    else -> "次へ"
+                                })
+                            }
                         }
                     }
                 }
@@ -226,21 +224,39 @@ internal fun SetupReadErrorScreen(onRetry: () -> Unit) {
 }
 
 @Composable
+private fun SetupOptionalActions(
+    skipLabel: String,
+    configureLabel: String,
+    initialFocus: FocusRequester,
+    enabled: Boolean,
+    onSelect: (Boolean) -> Unit
+) {
+    Button(
+        onClick = { onSelect(false) },
+        modifier = Modifier.focusRequester(initialFocus),
+        enabled = enabled
+    ) {
+        Text(skipLabel)
+    }
+    Button(onClick = { onSelect(true) }, enabled = enabled) {
+        Text(configureLabel)
+    }
+}
+
+@Composable
 private fun <T : Any> SetupChoices(
     options: List<Pair<T, String>>,
     selected: T?,
     initialFocus: FocusRequester,
-    initialOption: T = selected ?: options.first().first,
-    enabled: Boolean = true,
     onSelect: (T) -> Unit
 ) {
+    val initialOption = selected ?: options.first().first
     options.forEach { (option, label) ->
         SelectionDialogItem(
             label = label,
             isSelected = selected == option,
             onClick = { onSelect(option) },
-            modifier = if (initialOption == option) Modifier.focusRequester(initialFocus) else Modifier,
-            enabled = enabled
+            modifier = if (initialOption == option) Modifier.focusRequester(initialFocus) else Modifier
         )
     }
 }

@@ -43,8 +43,6 @@ internal class SetupViewModel @Inject constructor(
         private set
     var useFileLibrary by mutableStateOf<Boolean?>(null)
         private set
-    var useCloudflare by mutableStateOf<Boolean?>(null)
-        private set
     var smb by mutableStateOf(SmbServer(name = "", ip = "", port = "445", user = "", password = ""))
     var smbManualAddress by mutableStateOf(false)
         private set
@@ -107,7 +105,6 @@ internal class SetupViewModel @Inject constructor(
 
     fun selectCloudflare(use: Boolean) {
         if (isSaving || page != SetupPage.CLOUDFLARE_CHOICE) return
-        useCloudflare = use
         error = null
         if (use) advance() else finish(skipCloudflare = true)
     }
